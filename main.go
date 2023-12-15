@@ -1,6 +1,4 @@
 // Package main is the entrypoint.
-//
-// Ref: https://lodev.org/cgtutor/raycasting.html
 package main
 
 import (
