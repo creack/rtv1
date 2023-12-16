@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image"
 	"image/color"
 	"runtime"
 
@@ -19,16 +18,21 @@ func (g Game) Layout(_, _ int) (w, h int) {
 // Draw implements ebiten.
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.Black)
-	img := ebiten.NewImageFromImage(image.NewRGBA(screen.Bounds()))
+	img := g.img
+	if img == nil {
+		img = ebiten.NewImageFromImage(g.frame())
+		g.img = img
+	}
 
-	ebitenutil.DebugPrint(img, fmt.Sprintf(`TPS: %0.2f, FPS: %0.2f
+	if false {
+		ebitenutil.DebugPrint(img, fmt.Sprintf(`TPS: %0.2f, FPS: %0.2f
 Resolution: %dx%d
 Scene: %s
 
 Controls:
   C: Cycle scenes
 `, ebiten.ActualTPS(), ebiten.ActualFPS(), g.width, g.height, g.sceenName))
-
+	}
 	op := &ebiten.DrawImageOptions{}
 	screen.DrawImage(img, op)
 }

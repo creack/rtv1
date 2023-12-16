@@ -18,13 +18,19 @@ type Game struct {
 	width, height int
 
 	sceenName string
+	scene     *Scene
+
+	rt  *RayTracer
+	img *ebiten.Image
 }
 
 func main() {
 	g := &Game{
-		width:  1280,
-		height: 720,
+		width:  800,
+		height: 800,
 	}
+	g.rt = &RayTracer{}
+
 	flag.StringVar(&g.sceenName, "s", "scenes/scene1.json", "Scene file path.")
 	flag.Parse()
 	if err := g.loadScene(g.sceenName); err != nil {

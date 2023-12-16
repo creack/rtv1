@@ -5,14 +5,37 @@ import (
 	"math"
 )
 
-// Vec is a 3d vector.
-type Vec struct {
+// Point is an alias for Vector for clarity.
+type Point = Vector
+
+// Vector is a 3d vector.
+type Vector struct {
 	X, Y, Z float64
 }
 
+// Vec is a helper to create a vector.
+func Vec[T ~int | ~float64](x, y, z T) Vector {
+	return Vector{X: float64(x), Y: float64(y), Z: float64(z)}
+}
+
+// Norma normalizes.
+func (v Vector) Norm() Vector {
+	mag := v.Magnitude()
+	div := math.Inf(1)
+	if mag != 0 {
+		div = 1 / mag
+	}
+	return v.ScaleAll(div)
+}
+
+// Magnitude is the length.
+func (v Vector) Magnitude() float64 {
+	return math.Sqrt(v.Dot(v))
+}
+
 // ScaleAll the vector by the given factor.
-func (v Vec) ScaleAll(scale float64) Vec {
-	return Vec{
+func (v Vector) ScaleAll(scale float64) Vector {
+	return Vector{
 		X: v.X * scale,
 		Y: v.Y * scale,
 		Z: v.Z * scale,
@@ -20,8 +43,8 @@ func (v Vec) ScaleAll(scale float64) Vec {
 }
 
 // ScaleZ scales only Z.
-func (v Vec) ScaleZ(scale float64) Vec {
-	return Vec{
+func (v Vector) ScaleZ(scale float64) Vector {
+	return Vector{
 		X: v.X,
 		Y: v.Y,
 		Z: v.Z * scale,
@@ -29,16 +52,41 @@ func (v Vec) ScaleZ(scale float64) Vec {
 }
 
 // Translate the vector.
-func (v Vec) Translate(offset Vec) Vec {
-	return Vec{
+func (v Vector) Translate(offset Vector) Vector {
+	return Vector{
 		X: v.X + offset.X,
 		Y: v.Y + offset.Y,
 		Z: v.Z + offset.Z,
 	}
 }
 
+// Add v2 to v.
+func (v Vector) Add(v2 Vector) Vector { return v.Translate(v2) }
+
+// Sub v2 from v.
+func (v Vector) Sub(v2 Vector) Vector { return v.Translate(Vector{X: -v2.X, Y: -v2.Y, Z: -v2.Z}) }
+
+// Mul v2 and v.
+func (v Vector) Mul(v2 Vector) Vector {
+	return v.Translate(Vector{X: v.X * v2.X, Y: v.Y * v2.Y, Z: v.Z * v2.Z})
+}
+
+// Dot v2 and v.
+func (v Vector) Dot(v2 Vector) float64 {
+	return v.X*v2.X + v.Y*v2.Y + v.Z*v2.Z
+}
+
+// Cross v2 and v.
+func (v Vector) Cross(v2 Vector) Vector {
+	return Vec(
+		v.Y*v2.Z-v.Z*v2.Y,
+		v.Z*v2.X-v.X*v2.Z,
+		v.X*v2.Y-v.Y*v2.X,
+	)
+}
+
 // Rotate the vector.
-func (v Vec) Rotate(angle Vec) Vec {
+func (v Vector) Rotate(angle Vector) Vector {
 	v = v.MultiplyMatrix(GetRotationMatrix(angle.Z, AxisZ))
 	v = v.MultiplyMatrix(GetRotationMatrix(angle.X, AxisX))
 	v = v.MultiplyMatrix(GetRotationMatrix(angle.Y, AxisY))
@@ -46,8 +94,8 @@ func (v Vec) Rotate(angle Vec) Vec {
 }
 
 // MultiplyMatrix multiplies the given matrix with the current vector.
-func (v Vec) MultiplyMatrix(m Matrix) Vec {
-	return Vec{
+func (v Vector) MultiplyMatrix(m Matrix) Vector {
+	return Vector{
 		X: v.X*m[0][0] + v.Y*m[0][1] + v.Z*m[0][2],
 		Y: v.X*m[1][0] + v.Y*m[1][1] + v.Z*m[1][2],
 		Z: v.X*m[2][0] + v.Y*m[2][1] + v.Z*m[2][2],
