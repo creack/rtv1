@@ -5,7 +5,10 @@ import (
 	"embed"
 	"flag"
 	"log"
+	"os"
 	"runtime"
+	"runtime/pprof"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -20,22 +23,39 @@ type Game struct {
 	sceenName string
 	scene     *Scene
 
-	rt  *RayTracer
+	rt  RayTracer
 	img *ebiten.Image
 }
 
 func main() {
+	if runtime.GOOS != "js" {
+		f, err := os.Create("profile")
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	g := &Game{
 		width:  800,
 		height: 800,
 	}
-	g.rt = &RayTracer{}
+	g.rt = RayTracer{}
+
+	now := time.Now()
+	img := g.frame()
+	dur := time.Since(now).String()
+	println(dur)
+	if runtime.GOOS != "js" {
+		return
+	}
+	g.img = ebiten.NewImageFromImage(img)
 
 	flag.StringVar(&g.sceenName, "s", "scenes/scene1.json", "Scene file path.")
 	flag.Parse()
-	if err := g.loadScene(g.sceenName); err != nil {
-		log.Fatal(err)
-	}
+	// if err := g.loadScene(g.sceenName); err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	ebiten.SetWindowSize(g.width*2, g.height*2)
 	ebiten.SetWindowTitle("RTv1")

@@ -21,7 +21,7 @@ func Vec[T ~int | ~float64](x, y, z T) Vector {
 // Norma normalizes.
 func (v Vector) Norm() Vector {
 	mag := v.Magnitude()
-	div := math.Inf(1)
+	div := -1.
 	if mag != 0 {
 		div = 1 / mag
 	}
@@ -72,8 +72,8 @@ func (v Vector) Mul(v2 Vector) Vector {
 }
 
 // Dot v2 and v.
-func (v Vector) Dot(v2 Vector) float64 {
-	return v.X*v2.X + v.Y*v2.Y + v.Z*v2.Z
+func (v Vector) Dot(ov Vector) float64 {
+	return v.X*ov.X + v.Y*ov.Y + v.Z*ov.Z
 }
 
 // Cross v2 and v.

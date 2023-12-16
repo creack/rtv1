@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image/color"
 	"runtime"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -17,12 +16,8 @@ func (g Game) Layout(_, _ int) (w, h int) {
 
 // Draw implements ebiten.
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.Black)
+	// screen.Fill(color.Black)
 	img := g.img
-	if img == nil {
-		img = ebiten.NewImageFromImage(g.frame())
-		g.img = img
-	}
 
 	if false {
 		ebitenutil.DebugPrint(img, fmt.Sprintf(`TPS: %0.2f, FPS: %0.2f
@@ -33,6 +28,7 @@ Controls:
   C: Cycle scenes
 `, ebiten.ActualTPS(), ebiten.ActualFPS(), g.width, g.height, g.sceenName))
 	}
+	// ebitenutil.DebugPrint(img, fmt.Sprintf("drawn in %v", g.dur))
 	op := &ebiten.DrawImageOptions{}
 	screen.DrawImage(img, op)
 }
@@ -51,15 +47,16 @@ func (g *Game) Update() error {
 			return fmt.Errorf("readDir: %w", err)
 		}
 		i := -1
-		for ii, elem := range entries {
-			if elem.Name() == g.sceenName {
+		for ii := 0; ii < len(entries); ii++ {
+			if entries[ii].Name() == g.sceenName {
 				i = ii
 				break
 			}
 		}
-		if err := g.loadScene("scenes/" + entries[(i+1)%len(entries)].Name()); err != nil {
-			return fmt.Errorf("loadMap: %w", err)
-		}
+		_ = i
+		// if err := g.loadScene("scenes/" + entries[(i+1)%len(entries)].Name()); err != nil {
+		// 	return fmt.Errorf("loadMap: %w", err)
+		// }
 	}
 
 	return nil
