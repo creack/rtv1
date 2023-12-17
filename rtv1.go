@@ -283,7 +283,7 @@ func (p *nSphere) surface() Surface {
 type Checkerboard struct{}
 
 func (c Checkerboard) diffuse(pos math3.Vector) myColor {
-	if (int(pos.Z)+int(pos.X))%2 != 0 {
+	if (int(math.Floor(pos.Z))+int(math.Floor(pos.X)))%2 != 0 {
 		return newColor(1, 1, 1)
 	}
 	return defaultColor
@@ -294,7 +294,7 @@ func (c Checkerboard) specular(_ math3.Vector) myColor {
 }
 
 func (c Checkerboard) reflect(pos math3.Vector) float64 {
-	if (int(pos.Z)+int(pos.X))%2 != 0 {
+	if (int(math.Floor(pos.Z))+int(math.Floor(pos.X)))%2 != 0 {
 		return 0.1
 	}
 	return 0.7

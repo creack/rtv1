@@ -1,6 +1,6 @@
 .PHONY: build run clean
 
-SRCS = $(shell find . -name '*.go') $(shell find maps -type f) Dockerfile Makefile go.mod go.sum _tools/go.mod _tools/go.sum
+SRCS = $(shell find . -name '*.go') $(shell find scenes -type f) Dockerfile Makefile go.mod go.sum _tools/go.mod _tools/go.sum
 PORT = 8080
 
 run: .build
@@ -12,3 +12,5 @@ build: .build
 
 clean:
 	rm -f .build
+
+.DELETE_ON_ERROR:
