@@ -70,7 +70,7 @@ type Surface interface {
 	roughness() float64
 }
 
-const maxDepth = 5
+const maxDepth = 1
 
 type RayTracer struct{}
 
@@ -304,10 +304,10 @@ func (c Checkerboard) roughness() float64 {
 	return 150.
 }
 
-type Shiny struct{}
+type Shiny struct{ c myColor }
 
 func (c Shiny) diffuse(pos math3.Vector) myColor {
-	return newColor(1, 1, 1)
+	return c.c
 }
 
 func (c Shiny) specular(_ math3.Vector) myColor {
@@ -324,7 +324,8 @@ func (c Shiny) roughness() float64 {
 
 var (
 	checkerboardSurface Surface = Checkerboard{}
-	shinySurface        Surface = Shiny{}
+	shinySurface        Surface = Shiny{newColor(1, 1, 0)}
+	shinySurface2       Surface = Shiny{newColor(1, 0, 0)}
 )
 
 type myColor struct {
