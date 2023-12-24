@@ -21,10 +21,10 @@ RUN cd _tools && \
     go install ./vendor/github.com/hajimehoshi/wasmserve
 
 # Add the rest of the code.
-ADD . .
+#ADD . .
 
 # Build the wasm binary.
-RUN GOOS=js GOARCH=wasm go build -o /tmp/out .
+#RUN GOOS=js GOARCH=wasm go build -o /tmp/out .
 
 # Run the dev server as command.
 EXPOSE 8080

@@ -57,7 +57,7 @@ github.com/jezek/xgb
 github.com/jezek/xgb/randr
 github.com/jezek/xgb/render
 github.com/jezek/xgb/xproto
-# golang.org/x/exp/shiny v0.0.0-20231214170342-aacd6d4b4611
+# golang.org/x/exp/shiny v0.0.0-20231219180239-dc181d75b848
 ## explicit; go 1.18
 golang.org/x/exp/shiny/driver/gldriver
 golang.org/x/exp/shiny/driver/internal/drawer
