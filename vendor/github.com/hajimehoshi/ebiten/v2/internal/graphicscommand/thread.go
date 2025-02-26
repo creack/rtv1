@@ -15,16 +15,20 @@
 package graphicscommand
 
 import (
+	"context"
+
 	"github.com/hajimehoshi/ebiten/v2/internal/thread"
 )
 
 var theRenderThread thread.Thread = thread.NewNoopThread()
 
-// SetRenderThread must be called from the rendering thread where e.g. OpenGL works.
-//
-// TODO: Create thread in this package instead of setting it externally.
-func SetRenderThread(thread thread.Thread) {
-	theRenderThread = thread
+// SetOSThreadAsRenderThread sets an OS thread as rendering thread e.g. for OpenGL.
+func SetOSThreadAsRenderThread() {
+	theRenderThread = thread.NewOSThread()
+}
+
+func LoopRenderThread(ctx context.Context) {
+	_ = theRenderThread.Loop(ctx)
 }
 
 // runOnRenderThread calls f on the rendering thread.
@@ -38,4 +42,10 @@ func runOnRenderThread(f func(), sync bool) {
 	// CallAsync should block when the previously-queued task is not executed yet.
 	// This blocking is expected as double-buffering is used.
 	theRenderThread.CallAsync(f)
+}
+
+func Terminate() {
+	// Post a task to the render thread to ensure all the queued functions are executed.
+	// This is necessary especially for GLFW. glfw.Terminate will remove the context and any graphics calls after that will be invalidated.
+	theRenderThread.Call(func() {})
 }

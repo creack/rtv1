@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build darwin || windows
+//go:build (darwin || freebsd || linux || netbsd || openbsd || windows) && !nintendosdk && !playstation5
 
 package gl
 
@@ -69,10 +69,7 @@ type defaultContext struct {
 	gpGetShaderInfoLog         uintptr
 	gpGetShaderiv              uintptr
 	gpGetUniformLocation       uintptr
-	gpIsFramebuffer            uintptr
 	gpIsProgram                uintptr
-	gpIsRenderbuffer           uintptr
-	gpIsTexture                uintptr
 	gpLinkProgram              uintptr
 	gpPixelStorei              uintptr
 	gpReadPixels               uintptr
@@ -80,7 +77,7 @@ type defaultContext struct {
 	gpScissor                  uintptr
 	gpShaderSource             uintptr
 	gpStencilFunc              uintptr
-	gpStencilOp                uintptr
+	gpStencilOpSeparate        uintptr
 	gpTexImage2D               uintptr
 	gpTexParameteri            uintptr
 	gpTexSubImage2D            uintptr
@@ -303,6 +300,9 @@ func (c *defaultContext) GetInteger(pname uint32) int {
 
 func (c *defaultContext) GetProgramInfoLog(program uint32) string {
 	bufSize := c.GetProgrami(program, INFO_LOG_LENGTH)
+	if bufSize == 0 {
+		return ""
+	}
 	infoLog := make([]byte, bufSize)
 	purego.SyscallN(c.gpGetProgramInfoLog, uintptr(program), uintptr(bufSize), 0, uintptr(unsafe.Pointer(&infoLog[0])))
 	return string(infoLog)
@@ -316,6 +316,9 @@ func (c *defaultContext) GetProgrami(program uint32, pname uint32) int {
 
 func (c *defaultContext) GetShaderInfoLog(shader uint32) string {
 	bufSize := c.GetShaderi(shader, INFO_LOG_LENGTH)
+	if bufSize == 0 {
+		return ""
+	}
 	infoLog := make([]byte, bufSize)
 	purego.SyscallN(c.gpGetShaderInfoLog, uintptr(shader), uintptr(bufSize), 0, uintptr(unsafe.Pointer(&infoLog[0])))
 	return string(infoLog)
@@ -334,23 +337,8 @@ func (c *defaultContext) GetUniformLocation(program uint32, name string) int32 {
 	return int32(ret)
 }
 
-func (c *defaultContext) IsFramebuffer(framebuffer uint32) bool {
-	ret, _, _ := purego.SyscallN(c.gpIsFramebuffer, uintptr(framebuffer))
-	return byte(ret) != 0
-}
-
 func (c *defaultContext) IsProgram(program uint32) bool {
 	ret, _, _ := purego.SyscallN(c.gpIsProgram, uintptr(program))
-	return byte(ret) != 0
-}
-
-func (c *defaultContext) IsRenderbuffer(renderbuffer uint32) bool {
-	ret, _, _ := purego.SyscallN(c.gpIsRenderbuffer, uintptr(renderbuffer))
-	return byte(ret) != 0
-}
-
-func (c *defaultContext) IsTexture(texture uint32) bool {
-	ret, _, _ := purego.SyscallN(c.gpIsTexture, uintptr(texture))
 	return byte(ret) != 0
 }
 
@@ -384,8 +372,8 @@ func (c *defaultContext) StencilFunc(xfunc uint32, ref int32, mask uint32) {
 	purego.SyscallN(c.gpStencilFunc, uintptr(xfunc), uintptr(ref), uintptr(mask))
 }
 
-func (c *defaultContext) StencilOp(fail uint32, zfail uint32, zpass uint32) {
-	purego.SyscallN(c.gpStencilOp, uintptr(fail), uintptr(zfail), uintptr(zpass))
+func (c *defaultContext) StencilOpSeparate(face uint32, fail uint32, zfail uint32, zpass uint32) {
+	purego.SyscallN(c.gpStencilOpSeparate, uintptr(face), uintptr(fail), uintptr(zfail), uintptr(zpass))
 }
 
 func (c *defaultContext) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, format uint32, xtype uint32, pixels []byte) {
@@ -525,10 +513,7 @@ func (c *defaultContext) LoadFunctions() error {
 	c.gpGetShaderInfoLog = g.get("glGetShaderInfoLog")
 	c.gpGetShaderiv = g.get("glGetShaderiv")
 	c.gpGetUniformLocation = g.get("glGetUniformLocation")
-	c.gpIsFramebuffer = g.get("glIsFramebuffer")
 	c.gpIsProgram = g.get("glIsProgram")
-	c.gpIsRenderbuffer = g.get("glIsRenderbuffer")
-	c.gpIsTexture = g.get("glIsTexture")
 	c.gpLinkProgram = g.get("glLinkProgram")
 	c.gpPixelStorei = g.get("glPixelStorei")
 	c.gpReadPixels = g.get("glReadPixels")
@@ -536,7 +521,7 @@ func (c *defaultContext) LoadFunctions() error {
 	c.gpScissor = g.get("glScissor")
 	c.gpShaderSource = g.get("glShaderSource")
 	c.gpStencilFunc = g.get("glStencilFunc")
-	c.gpStencilOp = g.get("glStencilOp")
+	c.gpStencilOpSeparate = g.get("glStencilOpSeparate")
 	c.gpTexImage2D = g.get("glTexImage2D")
 	c.gpTexParameteri = g.get("glTexParameteri")
 	c.gpTexSubImage2D = g.get("glTexSubImage2D")

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !playstation5
+
 package opengl
 
 import (
@@ -35,18 +37,13 @@ type Image struct {
 
 // framebuffer is a wrapper of OpenGL's framebuffer.
 type framebuffer struct {
-	graphics *Graphics
-	native   framebufferNative
-	width    int
-	height   int
+	native         framebufferNative
+	viewportWidth  int
+	viewportHeight int
 }
 
 func (i *Image) ID() graphicsdriver.ImageID {
 	return i.id
-}
-
-func (i *Image) IsInvalidated() bool {
-	return !i.graphics.context.ctx.IsTexture(uint32(i.texture))
 }
 
 func (i *Image) Dispose() {
@@ -83,7 +80,7 @@ func (i *Image) ReadPixels(args []graphicsdriver.PixelsArgs) error {
 	return nil
 }
 
-func (i *Image) framebufferSize() (int, int) {
+func (i *Image) viewportSize() (int, int) {
 	if i.screen {
 		// The (default) framebuffer size can't be converted to a power of 2.
 		// On browsers, i.width and i.height are used as viewport size and
@@ -98,11 +95,12 @@ func (i *Image) ensureFramebuffer() error {
 		return nil
 	}
 
-	w, h := i.framebufferSize()
+	w, h := i.viewportSize()
 	if i.screen {
 		i.framebuffer = i.graphics.context.newScreenFramebuffer(w, h)
 		return nil
 	}
+
 	f, err := i.graphics.context.newFramebuffer(i.texture, w, h)
 	if err != nil {
 		return err
@@ -120,7 +118,7 @@ func (i *Image) ensureStencilBuffer() error {
 		return err
 	}
 
-	r, err := i.graphics.context.newRenderbuffer(i.framebufferSize())
+	r, err := i.graphics.context.newRenderbuffer(i.viewportSize())
 	if err != nil {
 		return err
 	}

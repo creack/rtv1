@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !playstation5
+
 package gl
 
 //go:generate go run gen.go
@@ -20,7 +22,7 @@ package gl
 // Context is a context for OpenGL (ES) functions.
 //
 // Context is basically the same as gomobile's gl.Context.
-// See https://pkg.go.dev/golang.org/x/mobile/gl#Context
+// See https://pkg.go.dev/github.com/ebitengine/gomobile/gl#Context
 type Context interface {
 	LoadFunctions() error
 	IsES() bool
@@ -70,10 +72,7 @@ type Context interface {
 	GetShaderInfoLog(shader uint32) string
 	GetShaderi(shader uint32, pname uint32) int
 	GetUniformLocation(program uint32, name string) int32
-	IsFramebuffer(framebuffer uint32) bool
 	IsProgram(program uint32) bool
-	IsRenderbuffer(renderbuffer uint32) bool
-	IsTexture(texture uint32) bool
 	LinkProgram(program uint32)
 	PixelStorei(pname uint32, param int32)
 	ReadPixels(dst []byte, x int32, y int32, width int32, height int32, format uint32, xtype uint32)
@@ -81,7 +80,7 @@ type Context interface {
 	Scissor(x, y, width, height int32)
 	ShaderSource(shader uint32, xstring string)
 	StencilFunc(func_ uint32, ref int32, mask uint32)
-	StencilOp(sfail, dpfail, dppass uint32)
+	StencilOpSeparate(face, sfail, dpfail, dppass uint32)
 	TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, format uint32, xtype uint32, pixels []byte)
 	TexParameteri(target uint32, pname uint32, param int32)
 	TexSubImage2D(target uint32, level int32, xoffset int32, yoffset int32, width int32, height int32, format uint32, xtype uint32, pixels []byte)

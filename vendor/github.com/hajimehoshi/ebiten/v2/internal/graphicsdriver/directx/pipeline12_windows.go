@@ -23,34 +23,56 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/internal/graphicsdriver"
 )
 
-var inputElementDescsForDX12 = []_D3D12_INPUT_ELEMENT_DESC{
-	{
-		SemanticName:         &([]byte("POSITION\000"))[0],
-		SemanticIndex:        0,
-		Format:               _DXGI_FORMAT_R32G32_FLOAT,
-		InputSlot:            0,
-		AlignedByteOffset:    _D3D12_APPEND_ALIGNED_ELEMENT,
-		InputSlotClass:       _D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-		InstanceDataStepRate: 0,
-	},
-	{
-		SemanticName:         &([]byte("TEXCOORD\000"))[0],
-		SemanticIndex:        0,
-		Format:               _DXGI_FORMAT_R32G32_FLOAT,
-		InputSlot:            0,
-		AlignedByteOffset:    _D3D12_APPEND_ALIGNED_ELEMENT,
-		InputSlotClass:       _D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-		InstanceDataStepRate: 0,
-	},
-	{
-		SemanticName:         &([]byte("COLOR\000"))[0],
-		SemanticIndex:        0,
-		Format:               _DXGI_FORMAT_R32G32B32A32_FLOAT,
-		InputSlot:            0,
-		AlignedByteOffset:    _D3D12_APPEND_ALIGNED_ELEMENT,
-		InputSlotClass:       _D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-		InstanceDataStepRate: 0,
-	},
+var inputElementDescsForDX12 []_D3D12_INPUT_ELEMENT_DESC
+
+func init() {
+	inputElementDescsForDX12 = []_D3D12_INPUT_ELEMENT_DESC{
+		{
+			SemanticName:         &([]byte("POSITION\000"))[0],
+			SemanticIndex:        0,
+			Format:               _DXGI_FORMAT_R32G32_FLOAT,
+			InputSlot:            0,
+			AlignedByteOffset:    _D3D12_APPEND_ALIGNED_ELEMENT,
+			InputSlotClass:       _D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			InstanceDataStepRate: 0,
+		},
+		{
+			SemanticName:         &([]byte("TEXCOORD\000"))[0],
+			SemanticIndex:        0,
+			Format:               _DXGI_FORMAT_R32G32_FLOAT,
+			InputSlot:            0,
+			AlignedByteOffset:    _D3D12_APPEND_ALIGNED_ELEMENT,
+			InputSlotClass:       _D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			InstanceDataStepRate: 0,
+		},
+		{
+			SemanticName:         &([]byte("COLOR\000"))[0],
+			SemanticIndex:        0,
+			Format:               _DXGI_FORMAT_R32G32B32A32_FLOAT,
+			InputSlot:            0,
+			AlignedByteOffset:    _D3D12_APPEND_ALIGNED_ELEMENT,
+			InputSlotClass:       _D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			InstanceDataStepRate: 0,
+		},
+	}
+	diff := graphics.VertexFloatCount - 8
+	if diff == 0 {
+		return
+	}
+	if diff%4 != 0 {
+		panic("directx: unexpected attribute layout")
+	}
+	for i := 0; i < diff/4; i++ {
+		inputElementDescsForDX12 = append(inputElementDescsForDX12, _D3D12_INPUT_ELEMENT_DESC{
+			SemanticName:         &([]byte("COLOR\000"))[0],
+			SemanticIndex:        uint32(i) + 1,
+			Format:               _DXGI_FORMAT_R32G32B32A32_FLOAT,
+			InputSlot:            0,
+			AlignedByteOffset:    _D3D12_APPEND_ALIGNED_ELEMENT,
+			InputSlotClass:       _D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			InstanceDataStepRate: 0,
+		})
+	}
 }
 
 const numDescriptorsPerFrame = 32
@@ -107,6 +129,10 @@ func blendOperationToBlendOp12(o graphicsdriver.BlendOperation) _D3D12_BLEND_OP 
 		return _D3D12_BLEND_OP_SUBTRACT
 	case graphicsdriver.BlendOperationReverseSubtract:
 		return _D3D12_BLEND_OP_REV_SUBTRACT
+	case graphicsdriver.BlendOperationMin:
+		return _D3D12_BLEND_OP_MIN
+	case graphicsdriver.BlendOperationMax:
+		return _D3D12_BLEND_OP_MAX
 	default:
 		panic(fmt.Sprintf("directx: invalid blend operation: %d", o))
 	}
@@ -124,7 +150,7 @@ type pipelineStates struct {
 	constantBufferMaps [frameCount][]uintptr
 }
 
-const numConstantBufferAndSourceTextures = 1 + graphics.ShaderImageCount
+const numConstantBufferAndSourceTextures = 1 + graphics.ShaderSrcImageCount
 
 func (p *pipelineStates) initialize(device *_ID3D12Device) (ferr error) {
 	// Create a CBV/SRV/UAV descriptor heap.
@@ -176,7 +202,7 @@ func (p *pipelineStates) initialize(device *_ID3D12Device) (ferr error) {
 	return nil
 }
 
-func (p *pipelineStates) drawTriangles(device *_ID3D12Device, commandList *_ID3D12GraphicsCommandList, frameIndex int, screen bool, srcs [graphics.ShaderImageCount]*image12, shader *shader12, dstRegions []graphicsdriver.DstRegion, uniforms []uint32, blend graphicsdriver.Blend, indexOffset int, evenOdd bool) error {
+func (p *pipelineStates) drawTriangles(device *_ID3D12Device, commandList *_ID3D12GraphicsCommandList, frameIndex int, screen bool, srcs [graphics.ShaderSrcImageCount]*image12, shader *shader12, dstRegions []graphicsdriver.DstRegion, uniforms []uint32, blend graphicsdriver.Blend, indexOffset int, fillRule graphicsdriver.FillRule) error {
 	idx := len(p.constantBuffers[frameIndex])
 	if idx >= numDescriptorsPerFrame {
 		return fmt.Errorf("directx: too many constant buffers")
@@ -285,7 +311,7 @@ func (p *pipelineStates) drawTriangles(device *_ID3D12Device, commandList *_ID3D
 	}
 	commandList.SetGraphicsRootDescriptorTable(2, sh)
 
-	if !evenOdd {
+	if fillRule == graphicsdriver.FillRuleFillAll {
 		s, err := shader.pipelineState(blend, noStencil, screen)
 		if err != nil {
 			return err
@@ -296,29 +322,40 @@ func (p *pipelineStates) drawTriangles(device *_ID3D12Device, commandList *_ID3D
 	for _, dstRegion := range dstRegions {
 		commandList.RSSetScissorRects([]_D3D12_RECT{
 			{
-				left:   int32(dstRegion.Region.X),
-				top:    int32(dstRegion.Region.Y),
-				right:  int32(dstRegion.Region.X + dstRegion.Region.Width),
-				bottom: int32(dstRegion.Region.Y + dstRegion.Region.Height),
+				left:   int32(dstRegion.Region.Min.X),
+				top:    int32(dstRegion.Region.Min.Y),
+				right:  int32(dstRegion.Region.Max.X),
+				bottom: int32(dstRegion.Region.Max.Y),
 			},
 		})
-		if evenOdd {
-			s, err := shader.pipelineState(blend, prepareStencil, screen)
+		switch fillRule {
+		case graphicsdriver.FillRuleFillAll:
+			commandList.DrawIndexedInstanced(uint32(dstRegion.IndexCount), 1, uint32(indexOffset), 0, 0)
+		case graphicsdriver.FillRuleNonZero:
+			s, err := shader.pipelineState(blend, incrementStencil, screen)
 			if err != nil {
 				return err
 			}
 			commandList.SetPipelineState(s)
 			commandList.DrawIndexedInstanced(uint32(dstRegion.IndexCount), 1, uint32(indexOffset), 0, 0)
-
-			s, err = shader.pipelineState(blend, drawWithStencil, screen)
+		case graphicsdriver.FillRuleEvenOdd:
+			s, err := shader.pipelineState(blend, invertStencil, screen)
 			if err != nil {
 				return err
 			}
 			commandList.SetPipelineState(s)
-			commandList.DrawIndexedInstanced(uint32(dstRegion.IndexCount), 1, uint32(indexOffset), 0, 0)
-		} else {
 			commandList.DrawIndexedInstanced(uint32(dstRegion.IndexCount), 1, uint32(indexOffset), 0, 0)
 		}
+
+		if fillRule != graphicsdriver.FillRuleFillAll {
+			s, err := shader.pipelineState(blend, drawWithStencil, screen)
+			if err != nil {
+				return err
+			}
+			commandList.SetPipelineState(s)
+			commandList.DrawIndexedInstanced(uint32(dstRegion.IndexCount), 1, uint32(indexOffset), 0, 0)
+		}
+
 		indexOffset += dstRegion.IndexCount
 	}
 
@@ -339,7 +376,7 @@ func (p *pipelineStates) ensureRootSignature(device *_ID3D12Device) (rootSignatu
 	}
 	srv := _D3D12_DESCRIPTOR_RANGE{
 		RangeType:                         _D3D12_DESCRIPTOR_RANGE_TYPE_SRV, // t0
-		NumDescriptors:                    graphics.ShaderImageCount,
+		NumDescriptors:                    graphics.ShaderSrcImageCount,
 		BaseShaderRegister:                0,
 		RegisterSpace:                     0,
 		OffsetInDescriptorsFromTableStart: 1,
@@ -438,14 +475,21 @@ func (p *pipelineStates) newPipelineState(device *_ID3D12Device, vsh, psh *_ID3D
 			StencilFunc:        _D3D12_COMPARISON_FUNC_ALWAYS,
 		},
 	}
-	writeMask := uint8(_D3D12_COLOR_WRITE_ENABLE_ALL)
+
+	var writeMask uint8
+	if stencilMode == noStencil || stencilMode == drawWithStencil {
+		writeMask = uint8(_D3D12_COLOR_WRITE_ENABLE_ALL)
+	}
 
 	switch stencilMode {
-	case prepareStencil:
+	case incrementStencil:
+		depthStencilDesc.StencilEnable = 1
+		depthStencilDesc.FrontFace.StencilPassOp = _D3D12_STENCIL_OP_INCR
+		depthStencilDesc.BackFace.StencilPassOp = _D3D12_STENCIL_OP_DECR
+	case invertStencil:
 		depthStencilDesc.StencilEnable = 1
 		depthStencilDesc.FrontFace.StencilPassOp = _D3D12_STENCIL_OP_INVERT
 		depthStencilDesc.BackFace.StencilPassOp = _D3D12_STENCIL_OP_INVERT
-		writeMask = 0
 	case drawWithStencil:
 		depthStencilDesc.StencilEnable = 1
 		depthStencilDesc.FrontFace.StencilFunc = _D3D12_COMPARISON_FUNC_NOT_EQUAL

@@ -688,7 +688,7 @@ func (g *graphics12) End(present bool) error {
 
 	// Release vertices and indices buffers when too many ones were created.
 	// The threshold is an arbitrary number.
-	// This is needed espciallly for testings, where present is always false.
+	// This is needed especially for testings, where present is always false.
 	if len(g.vertices[g.frameIndex]) >= 16 {
 		if err := g.waitForCommandQueue(); err != nil {
 			return err
@@ -876,7 +876,7 @@ func (g *graphics12) SetTransparent(transparent bool) {
 	// TODO: Implement this?
 }
 
-func (g *graphics12) SetVertices(vertices []float32, indices []uint16) (ferr error) {
+func (g *graphics12) SetVertices(vertices []float32, indices []uint32) (ferr error) {
 	// Create buffers if necessary.
 	vidx := len(g.vertices[g.frameIndex])
 	if cap(g.vertices[g.frameIndex]) > vidx {
@@ -946,7 +946,7 @@ func (g *graphics12) SetVertices(vertices []float32, indices []uint16) (ferr err
 	if err != nil {
 		return err
 	}
-	copy(unsafe.Slice((*uint16)(unsafe.Pointer(m)), len(indices)), indices)
+	copy(unsafe.Slice((*uint32)(unsafe.Pointer(m)), len(indices)), indices)
 	g.indices[g.frameIndex][iidx].value.Unmap(0, nil)
 
 	return nil
@@ -1054,20 +1054,8 @@ func (g *graphics12) SetVsyncEnabled(enabled bool) {
 	g.vsyncEnabled = enabled
 }
 
-func (g *graphics12) NeedsRestoring() bool {
-	return false
-}
-
 func (g *graphics12) NeedsClearingScreen() bool {
 	// TODO: Confirm this is really true.
-	return true
-}
-
-func (g *graphics12) IsGL() bool {
-	return false
-}
-
-func (g *graphics12) IsDirectX() bool {
 	return true
 }
 
@@ -1076,8 +1064,7 @@ func (g *graphics12) MaxImageSize() int {
 }
 
 func (g *graphics12) NewShader(program *shaderir.Program) (graphicsdriver.Shader, error) {
-	vs, ps, offsets := hlsl.Compile(program)
-	vsh, psh, err := compileShader(vs, ps)
+	vsh, psh, err := compileShader(program)
 	if err != nil {
 		return nil, err
 	}
@@ -1086,7 +1073,7 @@ func (g *graphics12) NewShader(program *shaderir.Program) (graphicsdriver.Shader
 		graphics:       g,
 		id:             g.genNextShaderID(),
 		uniformTypes:   program.Uniforms,
-		uniformOffsets: offsets,
+		uniformOffsets: hlsl.CalcUniformMemoryOffsets(program),
 		vertexShader:   vsh,
 		pixelShader:    psh,
 	}
@@ -1094,7 +1081,7 @@ func (g *graphics12) NewShader(program *shaderir.Program) (graphicsdriver.Shader
 	return s, nil
 }
 
-func (g *graphics12) DrawTriangles(dstID graphicsdriver.ImageID, srcs [graphics.ShaderImageCount]graphicsdriver.ImageID, shaderID graphicsdriver.ShaderID, dstRegions []graphicsdriver.DstRegion, indexOffset int, blend graphicsdriver.Blend, uniforms []uint32, evenOdd bool) error {
+func (g *graphics12) DrawTriangles(dstID graphicsdriver.ImageID, srcs [graphics.ShaderSrcImageCount]graphicsdriver.ImageID, shaderID graphicsdriver.ShaderID, dstRegions []graphicsdriver.DstRegion, indexOffset int, blend graphicsdriver.Blend, uniforms []uint32, fillRule graphicsdriver.FillRule) error {
 	if shaderID == graphicsdriver.InvalidShaderID {
 		return fmt.Errorf("directx: shader ID is invalid")
 	}
@@ -1105,7 +1092,7 @@ func (g *graphics12) DrawTriangles(dstID graphicsdriver.ImageID, srcs [graphics.
 
 	// Release constant buffers when too many ones will be created.
 	numPipelines := 1
-	if evenOdd {
+	if fillRule != graphicsdriver.FillRuleFillAll {
 		numPipelines = 2
 	}
 	if len(g.pipelineStates.constantBuffers[g.frameIndex])+numPipelines > numDescriptorsPerFrame {
@@ -1121,7 +1108,7 @@ func (g *graphics12) DrawTriangles(dstID graphicsdriver.ImageID, srcs [graphics.
 		resourceBarriers = append(resourceBarriers, rb)
 	}
 
-	var srcImages [graphics.ShaderImageCount]*image12
+	var srcImages [graphics.ShaderSrcImageCount]*image12
 	for i, srcID := range srcs {
 		src := g.images[srcID]
 		if src == nil {
@@ -1137,7 +1124,7 @@ func (g *graphics12) DrawTriangles(dstID graphicsdriver.ImageID, srcs [graphics.
 		g.drawCommandList.ResourceBarrier(resourceBarriers)
 	}
 
-	if err := dst.setAsRenderTarget(g.drawCommandList, g.device, evenOdd); err != nil {
+	if err := dst.setAsRenderTarget(g.drawCommandList, g.device, fillRule != graphicsdriver.FillRuleFillAll); err != nil {
 		return err
 	}
 
@@ -1167,10 +1154,10 @@ func (g *graphics12) DrawTriangles(dstID graphicsdriver.ImageID, srcs [graphics.
 	g.drawCommandList.IASetIndexBuffer(&_D3D12_INDEX_BUFFER_VIEW{
 		BufferLocation: g.indices[g.frameIndex][len(g.indices[g.frameIndex])-1].value.GetGPUVirtualAddress(),
 		SizeInBytes:    g.indices[g.frameIndex][len(g.indices[g.frameIndex])-1].sizeInBytes,
-		Format:         _DXGI_FORMAT_R16_UINT,
+		Format:         _DXGI_FORMAT_R32_UINT,
 	})
 
-	if err := g.pipelineStates.drawTriangles(g.device, g.drawCommandList, g.frameIndex, dst.screen, srcImages, shader, dstRegions, adjustedUniforms, blend, indexOffset, evenOdd); err != nil {
+	if err := g.pipelineStates.drawTriangles(g.device, g.drawCommandList, g.frameIndex, dst.screen, srcImages, shader, dstRegions, adjustedUniforms, blend, indexOffset, fillRule); err != nil {
 		return err
 	}
 

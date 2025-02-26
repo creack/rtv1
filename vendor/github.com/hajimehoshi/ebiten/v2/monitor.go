@@ -27,6 +27,29 @@ func (m *MonitorType) Name() string {
 	return (*ui.Monitor)(m).Name()
 }
 
+// DeviceScaleFactor returns the device scale factor of the monitor.
+//
+// DeviceScaleFactor returns a meaningful value on high-DPI display environment,
+// otherwise DeviceScaleFactor returns 1.
+//
+// On mobiles, DeviceScaleFactor returns 1 before the game starts e.g. in init functions.
+func (m *MonitorType) DeviceScaleFactor() float64 {
+	return (*ui.Monitor)(m).DeviceScaleFactor()
+}
+
+// Size returns the size of the monitor in device-independent pixels.
+// This is the same as the screen size in fullscreen mode.
+// The returned value can be given to SetSize function if the perfectly fit fullscreen is needed.
+//
+// On mobiles, Size returns (0, 0) before the game starts e.g. in init functions.
+//
+// Size's use cases are limited. If you are making a fullscreen application, you can use RunGame and
+// the Game interface's Layout function instead. If you are making a not-fullscreen application but the application's
+// behavior depends on the monitor size, Size is useful.
+func (m *MonitorType) Size() (int, int) {
+	return (*ui.Monitor)(m).Size()
+}
+
 // Monitor returns the current monitor.
 func Monitor() *MonitorType {
 	m := ui.Get().Monitor()

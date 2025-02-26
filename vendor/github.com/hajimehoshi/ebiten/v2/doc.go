@@ -70,10 +70,11 @@
 // This environment variable works when RunGame is called or RunGameWithOptions is called with GraphicsLibraryAuto.
 // This can take one of the following value:
 //
-//	"auto":    Ebitengine chooses the graphics library automatically. This is the default value.
-//	"opengl":  OpenGL, OpenGL ES, or WebGL.
-//	"directx": DirectX. This works only on Windows.
-//	"metal":   Metal. This works only on macOS or iOS.
+//	"auto":         Ebitengine chooses the graphics library automatically. This is the default value.
+//	"opengl":       OpenGL, OpenGL ES, or WebGL.
+//	"directx":      DirectX. This works only on Windows.
+//	"metal":        Metal. This works only on macOS or iOS.
+//	"playstation5": PlayStation 5. This works only on PlayStation 5.
 //
 // `EBITENGINE_DIRECTX` environment variable specifies various parameters for DirectX.
 // You can specify multiple values separated by a comma. The default value is empty (i.e. no parameters).
@@ -92,11 +93,6 @@
 // The option "featurelevel" is valid only for DirectX 12.
 // The possible values are "11_0", "11_1", "12_0", "12_1", and "12_2". The default value is "11_0".
 //
-// `EBITENGINE_OPENGL` environment variable specifies various parameters for OpenGL.
-// You can specify multiple values separated by a comma. The default value is empty (i.e. no parameters).
-//
-//	"es": Use OpenGL ES. Without this, OpenGL and OpenGL ES are automatically chosen.
-//
 // # Build tags
 //
 // `ebitenginedebug` outputs a log of graphics commands. This is useful to know what happens in Ebitengine. In general, the
@@ -106,13 +102,16 @@
 // This affects performance very much.
 //
 // `ebitenginesinglethread` disables Ebitengine's thread safety to unlock maximum performance. If you use this you will have
-// to manage threads yourself. Functions like IsKeyPressed will no longer be concurrent-safe with this build tag.
+// to manage threads yourself. Functions like `SetWindowSize` will no longer be concurrent-safe with this build tag.
 // They must be called from the main thread or the same goroutine as the given game's callback functions like Update
-// to RunGame. `ebitenginesinglethread` works only with desktops.
+// `ebitenginesinglethread` works only with desktops and consoles.
+// `ebitenginesinglethread` was deprecated as of v2.7. Use RunGameOptions.SingleThread instead.
 //
 // `microsoftgdk` is for Microsoft GDK (e.g. Xbox).
 //
 // `nintendosdk` is for NintendoSDK (e.g. Nintendo Switch).
 //
 // `nintendosdkprofile` enables a profiler for NintendoSDK.
+//
+// `playstation5` is for PlayStation 5.
 package ebiten

@@ -27,34 +27,56 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/internal/shaderir/hlsl"
 )
 
-var inputElementDescsForDX11 = []_D3D11_INPUT_ELEMENT_DESC{
-	{
-		SemanticName:         &([]byte("POSITION\000"))[0],
-		SemanticIndex:        0,
-		Format:               _DXGI_FORMAT_R32G32_FLOAT,
-		InputSlot:            0,
-		AlignedByteOffset:    _D3D11_APPEND_ALIGNED_ELEMENT,
-		InputSlotClass:       _D3D11_INPUT_PER_VERTEX_DATA,
-		InstanceDataStepRate: 0,
-	},
-	{
-		SemanticName:         &([]byte("TEXCOORD\000"))[0],
-		SemanticIndex:        0,
-		Format:               _DXGI_FORMAT_R32G32_FLOAT,
-		InputSlot:            0,
-		AlignedByteOffset:    _D3D11_APPEND_ALIGNED_ELEMENT,
-		InputSlotClass:       _D3D11_INPUT_PER_VERTEX_DATA,
-		InstanceDataStepRate: 0,
-	},
-	{
-		SemanticName:         &([]byte("COLOR\000"))[0],
-		SemanticIndex:        0,
-		Format:               _DXGI_FORMAT_R32G32B32A32_FLOAT,
-		InputSlot:            0,
-		AlignedByteOffset:    _D3D11_APPEND_ALIGNED_ELEMENT,
-		InputSlotClass:       _D3D11_INPUT_PER_VERTEX_DATA,
-		InstanceDataStepRate: 0,
-	},
+var inputElementDescsForDX11 []_D3D11_INPUT_ELEMENT_DESC
+
+func init() {
+	inputElementDescsForDX11 = []_D3D11_INPUT_ELEMENT_DESC{
+		{
+			SemanticName:         &([]byte("POSITION\000"))[0],
+			SemanticIndex:        0,
+			Format:               _DXGI_FORMAT_R32G32_FLOAT,
+			InputSlot:            0,
+			AlignedByteOffset:    _D3D11_APPEND_ALIGNED_ELEMENT,
+			InputSlotClass:       _D3D11_INPUT_PER_VERTEX_DATA,
+			InstanceDataStepRate: 0,
+		},
+		{
+			SemanticName:         &([]byte("TEXCOORD\000"))[0],
+			SemanticIndex:        0,
+			Format:               _DXGI_FORMAT_R32G32_FLOAT,
+			InputSlot:            0,
+			AlignedByteOffset:    _D3D11_APPEND_ALIGNED_ELEMENT,
+			InputSlotClass:       _D3D11_INPUT_PER_VERTEX_DATA,
+			InstanceDataStepRate: 0,
+		},
+		{
+			SemanticName:         &([]byte("COLOR\000"))[0],
+			SemanticIndex:        0,
+			Format:               _DXGI_FORMAT_R32G32B32A32_FLOAT,
+			InputSlot:            0,
+			AlignedByteOffset:    _D3D11_APPEND_ALIGNED_ELEMENT,
+			InputSlotClass:       _D3D11_INPUT_PER_VERTEX_DATA,
+			InstanceDataStepRate: 0,
+		},
+	}
+	diff := graphics.VertexFloatCount - 8
+	if diff == 0 {
+		return
+	}
+	if diff%4 != 0 {
+		panic("directx: unexpected attribute layout")
+	}
+	for i := 0; i < diff/4; i++ {
+		inputElementDescsForDX11 = append(inputElementDescsForDX11, _D3D11_INPUT_ELEMENT_DESC{
+			SemanticName:         &([]byte("COLOR\000"))[0],
+			SemanticIndex:        uint32(i) + 1,
+			Format:               _DXGI_FORMAT_R32G32B32A32_FLOAT,
+			InputSlot:            0,
+			AlignedByteOffset:    _D3D11_APPEND_ALIGNED_ELEMENT,
+			InputSlotClass:       _D3D11_INPUT_PER_VERTEX_DATA,
+			InstanceDataStepRate: 0,
+		})
+	}
 }
 
 func blendFactorToBlend11(f graphicsdriver.BlendFactor, alpha bool) _D3D11_BLEND {
@@ -106,6 +128,10 @@ func blendOperationToBlendOp11(o graphicsdriver.BlendOperation) _D3D11_BLEND_OP 
 		return _D3D11_BLEND_OP_SUBTRACT
 	case graphicsdriver.BlendOperationReverseSubtract:
 		return _D3D11_BLEND_OP_REV_SUBTRACT
+	case graphicsdriver.BlendOperationMin:
+		return _D3D11_BLEND_OP_MIN
+	case graphicsdriver.BlendOperationMax:
+		return _D3D11_BLEND_OP_MAX
 	default:
 		panic(fmt.Sprintf("directx: invalid blend operation: %d", o))
 	}
@@ -164,7 +190,7 @@ func newGraphics11(useWARP bool, useDebugLayer bool) (gr11 *graphics11, ferr err
 		flags |= _D3D11_CREATE_DEVICE_DEBUG
 	}
 
-	// Avoid _D3D_FEATURE_LEVEL_11_1 as DirectX 11.0 doesn't recgonize this.
+	// Avoid _D3D_FEATURE_LEVEL_11_1 as DirectX 11.0 doesn't recognize this.
 	// Avoid _D3D_FEATURE_LEVEL_9_* for some shaders features (#1431).
 	featureLevels := []_D3D_FEATURE_LEVEL{
 		_D3D_FEATURE_LEVEL_11_0,
@@ -312,7 +338,7 @@ func (g *graphics11) SetTransparent(transparent bool) {
 	// TODO: Implement this?
 }
 
-func (g *graphics11) SetVertices(vertices []float32, indices []uint16) error {
+func (g *graphics11) SetVertices(vertices []float32, indices []uint32) error {
 	if size := pow2(uint32(len(vertices)) * uint32(unsafe.Sizeof(vertices[0]))); g.vertexBufferSizeInBytes < size {
 		if g.vertexBuffer != nil {
 			g.vertexBuffer.Release()
@@ -348,7 +374,7 @@ func (g *graphics11) SetVertices(vertices []float32, indices []uint16) error {
 		}
 		g.indexBuffer = b
 		g.indexBufferSizeInBytes = size
-		g.deviceContext.IASetIndexBuffer(g.indexBuffer, _DXGI_FORMAT_R16_UINT, 0)
+		g.deviceContext.IASetIndexBuffer(g.indexBuffer, _DXGI_FORMAT_R32_UINT, 0)
 	}
 
 	// Copy the vertices data.
@@ -367,7 +393,7 @@ func (g *graphics11) SetVertices(vertices []float32, indices []uint16) error {
 		if err := g.deviceContext.Map(unsafe.Pointer(g.indexBuffer), 0, _D3D11_MAP_WRITE_DISCARD, 0, &mapped); err != nil {
 			return err
 		}
-		copy(unsafe.Slice((*uint16)(mapped.pData), len(indices)), indices)
+		copy(unsafe.Slice((*uint32)(mapped.pData), len(indices)), indices)
 		g.deviceContext.Unmap(unsafe.Pointer(g.indexBuffer), 0)
 	}
 
@@ -459,20 +485,8 @@ func (g *graphics11) SetVsyncEnabled(enabled bool) {
 	g.vsyncEnabled = enabled
 }
 
-func (g *graphics11) NeedsRestoring() bool {
-	return false
-}
-
 func (g *graphics11) NeedsClearingScreen() bool {
 	// TODO: Confirm this is really true.
-	return true
-}
-
-func (g *graphics11) IsGL() bool {
-	return false
-}
-
-func (g *graphics11) IsDirectX() bool {
 	return true
 }
 
@@ -490,8 +504,7 @@ func (g *graphics11) MaxImageSize() int {
 }
 
 func (g *graphics11) NewShader(program *shaderir.Program) (graphicsdriver.Shader, error) {
-	vs, ps, offsets := hlsl.Compile(program)
-	vsh, psh, err := compileShader(vs, ps)
+	vsh, psh, err := compileShader(program)
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +513,7 @@ func (g *graphics11) NewShader(program *shaderir.Program) (graphicsdriver.Shader
 		graphics:         g,
 		id:               g.genNextShaderID(),
 		uniformTypes:     program.Uniforms,
-		uniformOffsets:   offsets,
+		uniformOffsets:   hlsl.CalcUniformMemoryOffsets(program),
 		vertexShaderBlob: vsh,
 		pixelShaderBlob:  psh,
 	}
@@ -523,14 +536,14 @@ func (g *graphics11) removeShader(s *shader11) {
 	delete(g.shaders, s.id)
 }
 
-func (g *graphics11) DrawTriangles(dstID graphicsdriver.ImageID, srcIDs [graphics.ShaderImageCount]graphicsdriver.ImageID, shaderID graphicsdriver.ShaderID, dstRegions []graphicsdriver.DstRegion, indexOffset int, blend graphicsdriver.Blend, uniforms []uint32, evenOdd bool) error {
+func (g *graphics11) DrawTriangles(dstID graphicsdriver.ImageID, srcIDs [graphics.ShaderSrcImageCount]graphicsdriver.ImageID, shaderID graphicsdriver.ShaderID, dstRegions []graphicsdriver.DstRegion, indexOffset int, blend graphicsdriver.Blend, uniforms []uint32, fillRule graphicsdriver.FillRule) error {
 	// Remove bound textures first. This is needed to avoid warnings on the debugger.
 	g.deviceContext.OMSetRenderTargets([]*_ID3D11RenderTargetView{nil}, nil)
-	srvs := [graphics.ShaderImageCount]*_ID3D11ShaderResourceView{}
+	srvs := [graphics.ShaderSrcImageCount]*_ID3D11ShaderResourceView{}
 	g.deviceContext.PSSetShaderResources(0, srvs[:])
 
 	dst := g.images[dstID]
-	var srcs [graphics.ShaderImageCount]*image11
+	var srcs [graphics.ShaderSrcImageCount]*image11
 	for i, id := range srcIDs {
 		img := g.images[id]
 		if img == nil {
@@ -551,7 +564,7 @@ func (g *graphics11) DrawTriangles(dstID graphicsdriver.ImageID, srcIDs [graphic
 		},
 	})
 
-	if err := dst.setAsRenderTarget(evenOdd); err != nil {
+	if err := dst.setAsRenderTarget(fillRule != graphicsdriver.FillRuleFillAll); err != nil {
 		return err
 	}
 
@@ -561,7 +574,7 @@ func (g *graphics11) DrawTriangles(dstID graphicsdriver.ImageID, srcIDs [graphic
 		return err
 	}
 
-	if !evenOdd {
+	if fillRule == graphicsdriver.FillRuleFillAll {
 		bs, err := g.blendState(blend, noStencil)
 		if err != nil {
 			return err
@@ -578,38 +591,53 @@ func (g *graphics11) DrawTriangles(dstID graphicsdriver.ImageID, srcIDs [graphic
 	for _, dstRegion := range dstRegions {
 		g.deviceContext.RSSetScissorRects([]_D3D11_RECT{
 			{
-				left:   int32(dstRegion.Region.X),
-				top:    int32(dstRegion.Region.Y),
-				right:  int32(dstRegion.Region.X + dstRegion.Region.Width),
-				bottom: int32(dstRegion.Region.Y + dstRegion.Region.Height),
+				left:   int32(dstRegion.Region.Min.X),
+				top:    int32(dstRegion.Region.Min.Y),
+				right:  int32(dstRegion.Region.Max.X),
+				bottom: int32(dstRegion.Region.Max.Y),
 			},
 		})
 
-		if evenOdd {
-			bs, err := g.blendState(blend, prepareStencil)
+		switch fillRule {
+		case graphicsdriver.FillRuleFillAll:
+			g.deviceContext.DrawIndexed(uint32(dstRegion.IndexCount), uint32(indexOffset), 0)
+		case graphicsdriver.FillRuleNonZero:
+			bs, err := g.blendState(blend, incrementStencil)
 			if err != nil {
 				return err
 			}
 			g.deviceContext.OMSetBlendState(bs, nil, 0xffffffff)
-			dss, err := g.depthStencilState(prepareStencil)
+			dss, err := g.depthStencilState(incrementStencil)
 			if err != nil {
 				return err
 			}
 			g.deviceContext.OMSetDepthStencilState(dss, 0)
 			g.deviceContext.DrawIndexed(uint32(dstRegion.IndexCount), uint32(indexOffset), 0)
+		case graphicsdriver.FillRuleEvenOdd:
+			bs, err := g.blendState(blend, invertStencil)
+			if err != nil {
+				return err
+			}
+			g.deviceContext.OMSetBlendState(bs, nil, 0xffffffff)
+			dss, err := g.depthStencilState(invertStencil)
+			if err != nil {
+				return err
+			}
+			g.deviceContext.OMSetDepthStencilState(dss, 0)
+			g.deviceContext.DrawIndexed(uint32(dstRegion.IndexCount), uint32(indexOffset), 0)
+		}
 
-			bs, err = g.blendState(blend, drawWithStencil)
+		if fillRule != graphicsdriver.FillRuleFillAll {
+			bs, err := g.blendState(blend, drawWithStencil)
 			if err != nil {
 				return err
 			}
 			g.deviceContext.OMSetBlendState(bs, nil, 0xffffffff)
-			dss, err = g.depthStencilState(drawWithStencil)
+			dss, err := g.depthStencilState(drawWithStencil)
 			if err != nil {
 				return err
 			}
 			g.deviceContext.OMSetDepthStencilState(dss, 0)
-			g.deviceContext.DrawIndexed(uint32(dstRegion.IndexCount), uint32(indexOffset), 0)
-		} else {
 			g.deviceContext.DrawIndexed(uint32(dstRegion.IndexCount), uint32(indexOffset), 0)
 		}
 
@@ -630,9 +658,9 @@ func (g *graphics11) genNextShaderID() graphicsdriver.ShaderID {
 }
 
 func (g *graphics11) blendState(blend graphicsdriver.Blend, stencilMode stencilMode) (*_ID3D11BlendState, error) {
-	writeMask := uint8(_D3D11_COLOR_WRITE_ENABLE_ALL)
-	if stencilMode == prepareStencil {
-		writeMask = 0
+	var writeMask uint8
+	if stencilMode == noStencil || stencilMode == drawWithStencil {
+		writeMask = uint8(_D3D11_COLOR_WRITE_ENABLE_ALL)
 	}
 
 	key := blendStateKey{
@@ -696,7 +724,11 @@ func (g *graphics11) depthStencilState(mode stencilMode) (*_ID3D11DepthStencilSt
 		},
 	}
 	switch mode {
-	case prepareStencil:
+	case incrementStencil:
+		desc.StencilEnable = 1
+		desc.FrontFace.StencilPassOp = _D3D11_STENCIL_OP_INCR
+		desc.BackFace.StencilPassOp = _D3D11_STENCIL_OP_DECR
+	case invertStencil:
 		desc.StencilEnable = 1
 		desc.FrontFace.StencilPassOp = _D3D11_STENCIL_OP_INVERT
 		desc.BackFace.StencilPassOp = _D3D11_STENCIL_OP_INVERT

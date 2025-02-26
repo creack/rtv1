@@ -29,7 +29,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/internal/gamepad"
 )
 
-func (u *userInterfaceImpl) updateInputState() error {
+func (u *UserInterface) updateInputState() error {
 	var err error
 	u.mainThread.Call(func() {
 		err = u.updateInputStateImpl()
@@ -38,7 +38,7 @@ func (u *userInterfaceImpl) updateInputState() error {
 }
 
 // updateInputStateImpl must be called from the main thread.
-func (u *userInterfaceImpl) updateInputStateImpl() error {
+func (u *UserInterface) updateInputStateImpl() error {
 	if err := gamepad.Update(); err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (u *userInterfaceImpl) updateInputStateImpl() error {
 
 	u.inputState.Touches = u.inputState.Touches[:0]
 	for _, t := range u.nativeTouches {
-		x, y := u.context.clientPositionToLogicalPosition(float64(t.x), float64(t.y), deviceScaleFactor)
+		x, y := u.context.clientPositionToLogicalPosition(float64(t.x), float64(t.y), theMonitor.DeviceScaleFactor())
 		u.inputState.Touches = append(u.inputState.Touches, Touch{
 			ID: TouchID(t.id),
 			X:  int(x),
@@ -71,6 +71,6 @@ func (u *userInterfaceImpl) updateInputStateImpl() error {
 	return nil
 }
 
-func KeyName(key Key) string {
+func (u *UserInterface) KeyName(key Key) string {
 	return ""
 }

@@ -16,11 +16,17 @@ package ui
 
 import (
 	"math"
+	"strings"
 	"syscall/js"
 	"unicode"
 )
 
 var (
+	stringAlt     = js.ValueOf("Alt")
+	stringControl = js.ValueOf("Control")
+	stringMeta    = js.ValueOf("Meta")
+	stringShift   = js.ValueOf("Shift")
+
 	stringKeydown    = js.ValueOf("keydown")
 	stringKeyup      = js.ValueOf("keyup")
 	stringMousedown  = js.ValueOf("mousedown")
@@ -38,11 +44,11 @@ type touchInClient struct {
 	y  float64
 }
 
-func jsKeyToID(key js.Value) Key {
+func jsCodeToID(code js.Value) Key {
 	// js.Value cannot be used as a map key.
 	// As the number of keys is around 100, just a dumb loop should work.
-	for uiKey, jsKey := range uiKeyToJSKey {
-		if jsKey.Equal(key) {
+	for uiKey, jsCode := range uiKeyToJSCode {
+		if jsCode.Equal(code) {
 			return uiKey
 		}
 	}
@@ -57,31 +63,90 @@ var codeToMouseButton = map[int]MouseButton{
 	4: MouseButton4,
 }
 
-func (u *userInterfaceImpl) keyDown(code js.Value) {
-	id := jsKeyToID(code)
-	if id < 0 {
-		return
+func eventToKeys(e js.Value) (key0, key1 Key, fromKeyProperty bool) {
+	id := jsCodeToID(e.Get("code"))
+
+	// On mobile browsers, treat enter key as if this is from a `key` property.
+	if IsVirtualKeyboard() && id == KeyEnter {
+		return KeyEnter, -1, true
 	}
-	u.inputState.KeyPressed[id] = true
+	if id >= 0 {
+		return id, -1, false
+	}
+
+	// With a virtual keyboard on mobile devices, e.code is empty. Use a 'key' property instead (#2898).
+	key := e.Get("key")
+
+	// The key property doesn't distinghlish between left and right modifier keys.
+	// Let's assume both keys are pressed.
+	switch {
+	case key.Equal(stringAlt):
+		return KeyAltLeft, KeyAltRight, true
+	case key.Equal(stringControl):
+		return KeyControlLeft, KeyControlRight, true
+	case key.Equal(stringMeta):
+		return KeyMetaLeft, KeyMetaRight, true
+	case key.Equal(stringShift):
+		return KeyShiftLeft, KeyShiftRight, true
+	}
+
+	for uiKey, jsKey := range uiKeyToJSKey {
+		if key.Equal(jsKey) {
+			return uiKey, -1, true
+		}
+	}
+
+	return -1, -1, false
 }
 
-func (u *userInterfaceImpl) keyUp(code js.Value) {
-	id := jsKeyToID(code)
-	if id < 0 {
-		return
+func (u *UserInterface) keyDown(event js.Value) {
+	key0, key1, fromKeyProperty := eventToKeys(event)
+	if key0 >= 0 {
+		// If the key value comes from a 'key' property, a 'keydown' and 'keyup' event might be fired too quickly.
+		// Record the key duration to prevent immediate resetting a key state by a 'keyup' event.
+		// Resetting a key state is delayed until the next tick. See updateInputState.
+		if fromKeyProperty && !u.inputState.KeyPressed[key0] {
+			if u.keyDurationsByKeyProperty == nil {
+				u.keyDurationsByKeyProperty = map[Key]int{}
+			}
+			u.keyDurationsByKeyProperty[key0] = 1
+		}
+		u.inputState.KeyPressed[key0] = true
 	}
-	u.inputState.KeyPressed[id] = false
+	if key1 >= 0 {
+		if fromKeyProperty && !u.inputState.KeyPressed[key1] {
+			if u.keyDurationsByKeyProperty == nil {
+				u.keyDurationsByKeyProperty = map[Key]int{}
+			}
+			u.keyDurationsByKeyProperty[key1] = 1
+		}
+		u.inputState.KeyPressed[key1] = true
+	}
 }
 
-func (u *userInterfaceImpl) mouseDown(code int) {
+func (u *UserInterface) keyUp(event js.Value) {
+	key0, key1, fromKeyProperty := eventToKeys(event)
+	if key0 >= 0 {
+		if !fromKeyProperty || u.keyDurationsByKeyProperty[key0] == 0 {
+			u.inputState.KeyPressed[key0] = false
+		}
+	}
+	if key1 >= 0 {
+		if !fromKeyProperty || u.keyDurationsByKeyProperty[key1] == 0 {
+			u.inputState.KeyPressed[key1] = false
+		}
+	}
+}
+
+func (u *UserInterface) mouseDown(code int) {
 	u.inputState.MouseButtonPressed[codeToMouseButton[code]] = true
 }
 
-func (u *userInterfaceImpl) mouseUp(code int) {
+func (u *UserInterface) mouseUp(code int) {
 	u.inputState.MouseButtonPressed[codeToMouseButton[code]] = false
 }
 
-func (u *userInterfaceImpl) updateInputFromEvent(e js.Value) error {
+func (u *UserInterface) updateInputFromEvent(e js.Value) error {
 	// Avoid using js.Value.String() as String creates a Uint8Array via a TextEncoder and causes a heavy
 	// overhead (#1437).
 	switch t := e.Get("type"); {
@@ -91,9 +156,9 @@ func (u *userInterfaceImpl) updateInputFromEvent(e js.Value) error {
 				u.inputState.appendRune(r)
 			}
 		}
-		u.keyDown(e.Get("code"))
+		u.keyDown(e)
 	case t.Equal(stringKeyup):
-		u.keyUp(e.Get("code"))
+		u.keyUp(e)
 	case t.Equal(stringMousedown):
 		u.mouseDown(e.Get("button").Int())
 		u.setMouseCursorFromEvent(e)
@@ -114,7 +179,7 @@ func (u *userInterfaceImpl) updateInputFromEvent(e js.Value) error {
 	return nil
 }
 
-func (u *userInterfaceImpl) setMouseCursorFromEvent(e js.Value) {
+func (u *UserInterface) setMouseCursorFromEvent(e js.Value) {
 	if u.context == nil {
 		return
 	}
@@ -132,12 +197,12 @@ func (u *userInterfaceImpl) setMouseCursorFromEvent(e js.Value) {
 	u.cursorYInClient = u.origCursorYInClient
 }
 
-func (u *userInterfaceImpl) recoverCursorPosition() {
+func (u *UserInterface) recoverCursorPosition() {
 	u.cursorXInClient = u.origCursorXInClient
 	u.cursorYInClient = u.origCursorYInClient
 }
 
-func (u *userInterfaceImpl) updateTouchesFromEvent(e js.Value) {
+func (u *UserInterface) updateTouchesFromEvent(e js.Value) {
 	u.touchesInClient = u.touchesInClient[:0]
 
 	touches := e.Get("targetTouches")
@@ -199,12 +264,8 @@ func init() {
 	})
 }
 
-func KeyName(key Key) string {
-	return theUI.keyName(key)
-}
-
-func (u *userInterfaceImpl) keyName(key Key) string {
-	if !u.running {
+func (u *UserInterface) KeyName(key Key) string {
+	if !u.isRunning() {
 		return ""
 	}
 
@@ -220,18 +281,18 @@ func (u *userInterfaceImpl) keyName(key Key) string {
 		u.keyboardLayoutMap = <-jsKeyboardGetLayoutMapCh
 	}
 
-	n := u.keyboardLayoutMap.Call("get", uiKeyToJSKey[key])
+	n := u.keyboardLayoutMap.Call("get", uiKeyToJSCode[key])
 	if n.IsUndefined() {
 		return ""
 	}
 	return n.String()
 }
 
-func UpdateInputFromEvent(e js.Value) {
-	theUI.updateInputFromEvent(e)
+func (u *UserInterface) UpdateInputFromEvent(e js.Value) {
+	u.updateInputFromEvent(e)
 }
 
-func (u *userInterfaceImpl) saveCursorPosition() {
+func (u *UserInterface) saveCursorPosition() {
 	u.savedCursorX = u.inputState.CursorX
 	u.savedCursorY = u.inputState.CursorY
 	w, h := u.outsideSize()
@@ -239,8 +300,18 @@ func (u *userInterfaceImpl) saveCursorPosition() {
 	u.savedOutsideHeight = h
 }
 
-func (u *userInterfaceImpl) updateInputState() error {
-	s := u.DeviceScaleFactor()
+func (u *UserInterface) updateInputState() error {
+	// Reset the key state if a key is pressed by a 'key' property and the key's duration is big enough.
+	for key, duration := range u.keyDurationsByKeyProperty {
+		if duration >= 2 {
+			delete(u.keyDurationsByKeyProperty, key)
+			u.inputState.KeyPressed[key] = false
+			continue
+		}
+		u.keyDurationsByKeyProperty[key]++
+	}
+
+	s := theMonitor.DeviceScaleFactor()
 
 	if !math.IsNaN(u.savedCursorX) && !math.IsNaN(u.savedCursorY) {
 		// If savedCursorX and savedCursorY are valid values, the cursor is saved just before entering or exiting from fullscreen.
@@ -287,4 +358,89 @@ func (u *userInterfaceImpl) updateInputState() error {
 	}
 
 	return nil
+}
+
+// uiKeyToJSKey is a map from Key values to KeyboardEvent's key values.
+// Note that js.Value cannot be a map key.
+//
+// Reference: https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values
+var uiKeyToJSKey = map[Key]js.Value{
+	KeyCapsLock:       js.ValueOf("CapsLock"),
+	KeyNumLock:        js.ValueOf("NumLock"),
+	KeyScrollLock:     js.ValueOf("ScrollLock"),
+	KeyEnter:          js.ValueOf("Enter"),
+	KeyTab:            js.ValueOf("Tab"),
+	KeySpace:          js.ValueOf(" "),
+	KeyArrowDown:      js.ValueOf("ArrowDown"),
+	KeyArrowLeft:      js.ValueOf("ArrowLeft"),
+	KeyArrowRight:     js.ValueOf("ArrowRight"),
+	KeyArrowUp:        js.ValueOf("ArrowUp"),
+	KeyEnd:            js.ValueOf("End"),
+	KeyHome:           js.ValueOf("Home"),
+	KeyPageDown:       js.ValueOf("PageDown"),
+	KeyPageUp:         js.ValueOf("PageUp"),
+	KeyBackspace:      js.ValueOf("Backspace"),
+	KeyDelete:         js.ValueOf("Delete"),
+	KeyInsert:         js.ValueOf("Insert"),
+	KeyContextMenu:    js.ValueOf("ContextMenu"),
+	KeyEscape:         js.ValueOf("Escape"),
+	KeyPause:          js.ValueOf("Pause"),
+	KeyPrintScreen:    js.ValueOf("PrintScreen"),
+	KeyF1:             js.ValueOf("F1"),
+	KeyF2:             js.ValueOf("F2"),
+	KeyF3:             js.ValueOf("F3"),
+	KeyF4:             js.ValueOf("F4"),
+	KeyF5:             js.ValueOf("F5"),
+	KeyF6:             js.ValueOf("F6"),
+	KeyF7:             js.ValueOf("F7"),
+	KeyF8:             js.ValueOf("F8"),
+	KeyF9:             js.ValueOf("F9"),
+	KeyF10:            js.ValueOf("F10"),
+	KeyF11:            js.ValueOf("F11"),
+	KeyF12:            js.ValueOf("F12"),
+	KeyF13:            js.ValueOf("F13"),
+	KeyF14:            js.ValueOf("F14"),
+	KeyF15:            js.ValueOf("F15"),
+	KeyF16:            js.ValueOf("F16"),
+	KeyF17:            js.ValueOf("F17"),
+	KeyF18:            js.ValueOf("F18"),
+	KeyF19:            js.ValueOf("F19"),
+	KeyF20:            js.ValueOf("F20"),
+	KeyNumpadDecimal:  js.ValueOf("Decimal"),
+	KeyNumpadMultiply: js.ValueOf("Multiply"),
+	KeyNumpadAdd:      js.ValueOf("Add"),
+	KeyNumpadDivide:   js.ValueOf("Divide"),
+	KeyNumpadSubtract: js.ValueOf("Subtract"),
+	KeyNumpad0:        js.ValueOf("0"),
+	KeyNumpad1:        js.ValueOf("1"),
+	KeyNumpad2:        js.ValueOf("2"),
+	KeyNumpad3:        js.ValueOf("3"),
+	KeyNumpad4:        js.ValueOf("4"),
+	KeyNumpad5:        js.ValueOf("5"),
+	KeyNumpad6:        js.ValueOf("6"),
+	KeyNumpad7:        js.ValueOf("7"),
+	KeyNumpad8:        js.ValueOf("8"),
+	KeyNumpad9:        js.ValueOf("9"),
+}
+
+func (i *InputState) resetForBlur() {
+	for j := range i.KeyPressed {
+		i.KeyPressed[j] = false
+	}
+	for j := range i.MouseButtonPressed {
+		i.MouseButtonPressed[j] = false
+	}
+	i.Touches = i.Touches[:0]
+}
+
+func IsVirtualKeyboard() bool {
+	// Detect a virtual keyboard by the user agent.
+	// Note that this is not a correct way to detect a virtual keyboard.
+	// In the future, we should use the `navigator.virtualKeyboard` API.
+	// https://developer.mozilla.org/en-US/docs/Web/API/Navigator/virtualKeyboard
+	ua := js.Global().Get("navigator").Get("userAgent").String()
+	if strings.Contains(ua, "Android") || strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") || strings.Contains(ua, "iPod") {
+		return true
+	}
+	return false
 }

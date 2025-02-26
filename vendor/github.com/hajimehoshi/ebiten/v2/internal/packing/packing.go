@@ -32,13 +32,7 @@ func isPositivePowerOf2(x int) bool {
 	if x <= 0 {
 		return false
 	}
-	for x > 1 {
-		if x/2*2 != x {
-			return false
-		}
-		x /= 2
-	}
-	return true
+	return x&(x-1) == 0
 }
 
 func NewPage(initWidth, initHeight int, maxSize int) *Page {
@@ -172,7 +166,7 @@ func (p *Page) Alloc(width, height int) *Node {
 			region: image.Rect(0, 0, p.width, p.height),
 		}
 	}
-	return p.extendForAndAlloc(width, height)
+	return p.extendAndAlloc(width, height)
 }
 
 func (p *Page) Free(node *Node) {
@@ -210,7 +204,7 @@ func walk(n *Node, f func(n *Node) error) error {
 	return nil
 }
 
-func (p *Page) extendForAndAlloc(width, height int) *Node {
+func (p *Page) extendAndAlloc(width, height int) *Node {
 	if n := alloc(p.root, width, height); n != nil {
 		return n
 	}

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !android && !ios && !js && !nintendosdk
+//go:build !android && !ios && !js && !nintendosdk && !playstation5
 
 package ui
 
@@ -21,31 +21,40 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/hajimehoshi/ebiten/v2/internal/devicescale"
 	"github.com/hajimehoshi/ebiten/v2/internal/glfw"
 )
 
 // Monitor is a wrapper around glfw.Monitor.
 type Monitor struct {
-	m  *glfw.Monitor
-	vm *glfw.VidMode
-	// Pos of monitor in virtual coords
-	x      int
-	y      int
-	width  int
-	height int
-	id     int
-	name   string
-}
+	m         *glfw.Monitor
+	videoMode *glfw.VidMode
 
-// Bounds returns the monitor's bounds.
-func (m *Monitor) Bounds() image.Rectangle {
-	return image.Rect(m.x, m.y, m.x+m.width, m.y+m.height)
+	id                 int
+	name               string
+	boundsInGLFWPixels image.Rectangle
+	contentScale       float64
 }
 
 // Name returns the monitor's name.
 func (m *Monitor) Name() string {
 	return m.name
+}
+
+// DeviceScaleFactor is concurrent-safe as contentScale is immutable.
+func (m *Monitor) DeviceScaleFactor() float64 {
+	return m.contentScale
+}
+
+// Size returns the size of the monitor in device-independent pixels.
+func (m *Monitor) Size() (int, int) {
+	w, h := m.sizeInDIP()
+	return int(w), int(h)
+}
+
+func (m *Monitor) sizeInDIP() (float64, float64) {
+	w, h := m.boundsInGLFWPixels.Dx(), m.boundsInGLFWPixels.Dy()
+	s := m.DeviceScaleFactor()
+	return dipFromGLFWPixel(float64(w), s), dipFromGLFWPixel(float64(h), s)
 }
 
 type monitors struct {
@@ -56,13 +65,13 @@ type monitors struct {
 
 	m sync.Mutex
 
-	updateCalled int32
+	updateCalled atomic.Bool
 }
 
 var theMonitors monitors
 
 func (m *monitors) append(ms []*Monitor) []*Monitor {
-	if atomic.LoadInt32(&m.updateCalled) == 0 {
+	if !m.updateCalled.Load() {
 		panic("ui: (*monitors).update must be called before (*monitors).append is called")
 	}
 
@@ -73,51 +82,89 @@ func (m *monitors) append(ms []*Monitor) []*Monitor {
 }
 
 func (m *monitors) primaryMonitor() *Monitor {
-	if atomic.LoadInt32(&m.updateCalled) == 0 {
+	if !m.updateCalled.Load() {
 		panic("ui: (*monitors).update must be called before (*monitors).primaryMonitor is called")
 	}
 
 	m.m.Lock()
 	defer m.m.Unlock()
 
+	// GetMonitors might return nil in theory (#1878, #1887).
+	// primaryMonitor can be called at the initialization, so monitors can be nil.
+	if len(m.monitors) == 0 {
+		return nil
+	}
 	return m.monitors[0]
 }
 
-func (m *monitors) monitorFromGLFWMonitor(glfwMonitor *glfw.Monitor) *Monitor {
+// monitorFromPosition returns a monitor for the given position (x, y),
+// or returns nil if monitor is not found.
+// The position is in GLFW pixels.
+func (m *monitors) monitorFromPosition(x, y int) *Monitor {
 	m.m.Lock()
 	defer m.m.Unlock()
 
 	for _, m := range m.monitors {
-		if x, y := glfwMonitor.GetPos(); m.x == x && m.y == y {
+		// Use an inclusive range. On macOS, the cursor position can take this range (#2794).
+		b := m.boundsInGLFWPixels
+		if b.Min.X <= x && x <= b.Max.X && b.Min.Y <= y && y <= b.Max.Y {
 			return m
 		}
 	}
 	return nil
 }
 
-func (m *monitors) monitorFromID(id int) *Monitor {
-	m.m.Lock()
-	defer m.m.Unlock()
-
-	return m.monitors[id]
-}
-
 // update must be called from the main thread.
-func (m *monitors) update() {
-	glfwMonitors := glfw.GetMonitors()
+func (m *monitors) update() error {
+	glfwMonitors, err := glfw.GetMonitors()
+	if err != nil {
+		return err
+	}
 	newMonitors := make([]*Monitor, 0, len(glfwMonitors))
 	for i, m := range glfwMonitors {
-		x, y := m.GetPos()
-		vm := m.GetVideoMode()
+		x, y, err := m.GetPos()
+		if err != nil {
+			return err
+		}
+
+		// TODO: Detect the update of the content scale by SetContentScaleCallback (#2343).
+		contentScale := 1.0
+
+		// Keep calling GetContentScale until the returned scale is 0 (#2051).
+		// Retry this at most 5 times to avoid an infinite loop.
+		for i := 0; i < 5; i++ {
+			// An error can happen e.g. when entering a screensaver on Windows (#2488).
+			sx, _, err := m.GetContentScale()
+			if err != nil {
+				continue
+			}
+			if sx == 0 {
+				continue
+			}
+			contentScale = float64(sx)
+			break
+		}
+
+		videoMode, err := m.GetVideoMode()
+		if err != nil {
+			return err
+		}
+		name, err := m.GetName()
+		if err != nil {
+			return err
+		}
+		w, h, err := glfwMonitorSizeInGLFWPixels(m)
+		if err != nil {
+			return err
+		}
+		b := image.Rect(x, y, x+w, y+h)
 		newMonitors = append(newMonitors, &Monitor{
-			m:      m,
-			vm:     m.GetVideoMode(),
-			x:      x,
-			y:      y,
-			width:  vm.Width,
-			height: vm.Height,
-			name:   m.GetName(),
-			id:     i,
+			m:                  m,
+			videoMode:          videoMode,
+			id:                 i,
+			name:               name,
+			boundsInGLFWPixels: b,
+			contentScale:       contentScale,
 		})
 	}
 
@@ -125,8 +172,6 @@ func (m *monitors) update() {
 	m.monitors = newMonitors
 	m.m.Unlock()
 
-	clearVideoModeScaleCache()
-	devicescale.ClearCache()
-
-	atomic.StoreInt32(&m.updateCalled, 1)
+	m.updateCalled.Store(true)
+	return nil
 }

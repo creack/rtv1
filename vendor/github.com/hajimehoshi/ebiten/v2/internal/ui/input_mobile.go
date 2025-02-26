@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build (android || ios) && !nintendosdk
+//go:build android || ios
 
 package ui
 
@@ -26,7 +26,7 @@ type TouchForInput struct {
 	Y float64
 }
 
-func (u *userInterfaceImpl) updateInputStateFromOutside(keys map[Key]struct{}, runes []rune, touches []TouchForInput) {
+func (u *UserInterface) updateInputStateFromOutside(keys map[Key]struct{}, runes []rune, touches []TouchForInput) {
 	u.m.Lock()
 	defer u.m.Unlock()
 
@@ -43,11 +43,11 @@ func (u *userInterfaceImpl) updateInputStateFromOutside(keys map[Key]struct{}, r
 	}
 }
 
-func (u *userInterfaceImpl) updateInputState() error {
+func (u *UserInterface) updateInputState() error {
 	u.m.Lock()
 	defer u.m.Unlock()
 
-	s := u.DeviceScaleFactor()
+	s := theMonitor.DeviceScaleFactor()
 
 	u.inputState.Touches = u.inputState.Touches[:0]
 	for _, t := range u.touches {
@@ -61,7 +61,7 @@ func (u *userInterfaceImpl) updateInputState() error {
 	return nil
 }
 
-func KeyName(key Key) string {
+func (u *UserInterface) KeyName(key Key) string {
 	// TODO: Implement this.
 	return ""
 }

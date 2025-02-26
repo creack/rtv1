@@ -16,8 +16,10 @@
 package shaderir
 
 import (
+	"encoding/hex"
 	"go/constant"
 	"go/token"
+	"hash/fnv"
 	"sort"
 	"strings"
 )
@@ -29,6 +31,21 @@ const (
 	Pixels
 )
 
+type SourceHash [16]byte
+
+func CalcSourceHash(source []byte) SourceHash {
+	h := fnv.New128a()
+	_, _ = h.Write(source)
+
+	var hash SourceHash
+	h.Sum(hash[:0])
+	return hash
+}
+
+func (s SourceHash) String() string {
+	return hex.EncodeToString(s[:])
+}
+
 type Program struct {
 	UniformNames []string
 	Uniforms     []Type
@@ -39,6 +56,8 @@ type Program struct {
 	VertexFunc   VertexFunc
 	FragmentFunc FragmentFunc
 	Unit         Unit
+
+	SourceHash SourceHash
 
 	uniformFactors []uint32
 }
@@ -461,7 +480,7 @@ func (p *Program) appendReachableUniformVariablesFromBlock(indices []int, block 
 	return indices
 }
 
-// FilterUniformVariables replaces uniform variables with nil when they are not used.
+// FilterUniformVariables replaces uniform variables with 0 when they are not used.
 // By minimizing uniform variables, more commands can be merged in the graphicscommand package.
 func (p *Program) FilterUniformVariables(uniforms []uint32) {
 	if p.uniformFactors == nil {
@@ -471,14 +490,16 @@ func (p *Program) FilterUniformVariables(uniforms []uint32) {
 		for _, idx := range indices {
 			reachableUniforms[idx] = true
 		}
+		p.uniformFactors = make([]uint32, len(uniforms))
+		var idx int
 		for i, typ := range p.Uniforms {
-			fs := make([]uint32, typ.Uint32Count())
+			c := typ.Uint32Count()
 			if reachableUniforms[i] {
-				for j := range fs {
-					fs[j] = 1
+				for i := idx; i < idx+c; i++ {
+					p.uniformFactors[i] = 1
 				}
 			}
-			p.uniformFactors = append(p.uniformFactors, fs...)
+			idx += c
 		}
 	}
 

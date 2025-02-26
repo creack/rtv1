@@ -39,8 +39,6 @@ type OSThread struct {
 }
 
 // NewOSThread creates a new thread.
-//
-// queueSize indicates the function queue size. This matters when you use CallAsync.
 func NewOSThread() *OSThread {
 	return &OSThread{
 		funcs: make(chan queueItem),
@@ -49,6 +47,8 @@ func NewOSThread() *OSThread {
 }
 
 // Loop starts the thread loop until Stop is called on the current OS thread.
+//
+// Loop returns ctx's error if exists.
 //
 // Loop must be called on the OS thread.
 func (t *OSThread) Loop(ctx context.Context) error {

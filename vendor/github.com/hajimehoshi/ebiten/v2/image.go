@@ -18,12 +18,15 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"unsafe"
 
 	"github.com/hajimehoshi/ebiten/v2/internal/affine"
 	"github.com/hajimehoshi/ebiten/v2/internal/atlas"
 	"github.com/hajimehoshi/ebiten/v2/internal/builtinshader"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphics"
+	"github.com/hajimehoshi/ebiten/v2/internal/graphicscommand"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphicsdriver"
+	"github.com/hajimehoshi/ebiten/v2/internal/restorable"
 	"github.com/hajimehoshi/ebiten/v2/internal/shaderir"
 	"github.com/hajimehoshi/ebiten/v2/internal/ui"
 )
@@ -41,6 +44,9 @@ type Image struct {
 
 	// tmpVertices must not be reused until ui.Image.Draw* is called.
 	tmpVertices []float32
+
+	// tmpIndices must not be reused until ui.Image.Draw* is called.
+	tmpIndices []uint32
 
 	// tmpUniforms must not be reused until ui.Image.Draw* is called.
 	tmpUniforms []uint32
@@ -138,6 +144,16 @@ type DrawImageOptions struct {
 	// Filter is a type of texture filter.
 	// The default (zero) value is FilterNearest.
 	Filter Filter
+
+	// DisableMipmaps disables mipmaps.
+	// When Filter is FilterLinear and GeoM shrinks the image, mipmaps are used by default.
+	// Mipmap is useful to render a shrunk image with high quality.
+	// However, mipmaps can be expensive, especially on mobiles.
+	// When DisableMipmaps is true, mipmap is not used.
+	// When Filter is not FilterLinear, DisableMipmaps is ignored.
+	//
+	// The default (zero) value is false.
+	DisableMipmaps bool
 }
 
 // adjustPosition converts the position in the *ebiten.Image coordinate to the *ui.Image coordinate.
@@ -174,17 +190,6 @@ func (i *Image) adjustedBounds() image.Rectangle {
 	b := i.Bounds()
 	x, y := i.adjustPosition(b.Min.X, b.Min.Y)
 	return image.Rect(x, y, x+b.Dx(), y+b.Dy())
-}
-
-func (i *Image) adjustedRegion() graphicsdriver.Region {
-	b := i.Bounds()
-	x, y := i.adjustPosition(b.Min.X, b.Min.Y)
-	return graphicsdriver.Region{
-		X:      float32(x),
-		Y:      float32(y),
-		Width:  float32(b.Dx()),
-		Height: float32(b.Dy()),
-	}
 }
 
 // DrawImage draws the given image on the image i.
@@ -254,10 +259,10 @@ func (i *Image) DrawImage(img *Image, options *DrawImageOptions) {
 	colorm, cr, cg, cb, ca := colorMToScale(options.ColorM.affineColorM())
 	cr, cg, cb, ca = options.ColorScale.apply(cr, cg, cb, ca)
 	vs := i.ensureTmpVertices(4 * graphics.VertexFloatCount)
-	graphics.QuadVertices(vs, float32(sx0), float32(sy0), float32(sx1), float32(sy1), a, b, c, d, tx, ty, cr, cg, cb, ca)
+	graphics.QuadVerticesFromSrcAndMatrix(vs, float32(sx0), float32(sy0), float32(sx1), float32(sy1), a, b, c, d, tx, ty, cr, cg, cb, ca)
 	is := graphics.QuadIndices()
 
-	srcs := [graphics.ShaderImageCount]*ui.Image{img.image}
+	srcs := [graphics.ShaderSrcImageCount]*ui.Image{img.image}
 
 	useColorM := !colorm.IsIdentity()
 	shader := builtinShader(filter, builtinshader.AddressUnsafe, useColorM)
@@ -272,7 +277,36 @@ func (i *Image) DrawImage(img *Image, options *DrawImageOptions) {
 		})
 	}
 
-	i.image.DrawTriangles(srcs, vs, is, blend, i.adjustedRegion(), [graphics.ShaderImageCount]graphicsdriver.Region{img.adjustedRegion()}, shader.shader, i.tmpUniforms, false, canSkipMipmap(geoM, filter), false)
+	dr := i.adjustedBounds()
+	hint := restorable.HintNone
+	if overwritesDstRegion(options.Blend, dr, geoM, sx0, sy0, sx1, sy1) {
+		hint = restorable.HintOverwriteDstRegion
+	}
+
+	skipMipmap := options.DisableMipmaps
+	if !skipMipmap {
+		skipMipmap = canSkipMipmap(geoM, filter)
+	}
+	i.image.DrawTriangles(srcs, vs, is, blend, dr, [graphics.ShaderSrcImageCount]image.Rectangle{img.adjustedBounds()}, shader.shader, i.tmpUniforms, graphicsdriver.FillRuleFillAll, skipMipmap, false, hint)
+}
+
+// overwritesDstRegion reports whether the given parameters overwrite the destination region completely.
+func overwritesDstRegion(blend Blend, dstRegion image.Rectangle, geoM GeoM, sx0, sy0, sx1, sy1 int) bool {
+	// TODO: More precisely, BlendFactorDestinationRGB, BlendFactorDestinationAlpha, and operations should be checked.
+	if blend != BlendCopy && blend != BlendClear {
+		return false
+	}
+	// Check the result vertices is not a rotated rectangle.
+	if geoM.b != 0 || geoM.c != 0 {
+		return false
+	}
+	// Check the result vertices completely covers dstRegion.
+	x0, y0 := geoM.Apply(float64(sx0), float64(sy0))
+	x1, y1 := geoM.Apply(float64(sx1), float64(sy1))
+	if float64(dstRegion.Min.X) < x0 || float64(dstRegion.Min.Y) < y0 || float64(dstRegion.Max.X) > x1 || float64(dstRegion.Max.Y) > y1 {
+		return false
+	}
+	return true
 }
 
 // Vertex represents a vertex passed to DrawTriangles.
@@ -301,7 +335,19 @@ type Vertex struct {
 	ColorG float32
 	ColorB float32
 	ColorA float32
+
+	// Custom0/Custom1/Custom2/Custom3 represents general-purpose values passed to the shader.
+	// In order to use them, Fragment must have an additional vec4 argument.
+	//
+	// These values are valid only when DrawTrianglesShader is used.
+	// In other cases, these values are ignored.
+	Custom0 float32
+	Custom1 float32
+	Custom2 float32
+	Custom3 float32
 }
+
+var _ [0]byte = [unsafe.Sizeof(Vertex{}) - unsafe.Sizeof(float32(0))*graphics.VertexFloatCount]byte{}
 
 // Address represents a sampler address mode.
 type Address int
@@ -321,12 +367,35 @@ const (
 type FillRule int
 
 const (
+	// FillRuleFillAll indicates all the triangles are rendered regardless of overlaps.
+	FillRuleFillAll FillRule = FillRule(graphicsdriver.FillRuleFillAll)
+
+	// FillRuleNonZero means that triangles are rendered based on the non-zero rule.
+	// If and only if the number of overlaps is not 0, the region is rendered.
+	FillRuleNonZero FillRule = FillRule(graphicsdriver.FillRuleNonZero)
+
+	// FillRuleEvenOdd means that triangles are rendered based on the even-odd rule.
+	// If and only if the number of overlaps is odd, the region is rendered.
+	FillRuleEvenOdd FillRule = FillRule(graphicsdriver.FillRuleEvenOdd)
+)
+
+const (
 	// FillAll indicates all the triangles are rendered regardless of overlaps.
-	FillAll FillRule = iota
+	//
+	// Deprecated: as of v2.8. Use FillRuleFillAll instead.
+	FillAll = FillRuleFillAll
+
+	// NonZero means that triangles are rendered based on the non-zero rule.
+	// If and only if the number of overlaps is not 0, the region is rendered.
+	//
+	// Deprecated: as of v2.8. Use FillRuleNonZero instead.
+	NonZero = FillRuleNonZero
 
 	// EvenOdd means that triangles are rendered based on the even-odd rule.
 	// If and only if the number of overlaps is odd, the region is rendered.
-	EvenOdd
+	//
+	// Deprecated: as of v2.8. Use FillRuleEvenOdd instead.
+	EvenOdd = FillRuleEvenOdd
 )
 
 // ColorScaleMode is the mode of color scales in vertices.
@@ -377,11 +446,11 @@ type DrawTrianglesOptions struct {
 
 	// FillRule indicates the rule how an overlapped region is rendered.
 	//
-	// The rule EvenOdd is useful when you want to render a complex polygon.
+	// The rules FillRuleNonZero and FillRuleEvenOdd are useful when you want to render a complex polygon.
 	// A complex polygon is a non-convex polygon like a concave polygon, a polygon with holes, or a self-intersecting polygon.
 	// See examples/vector for actual usages.
 	//
-	// The default (zero) value is FillAll.
+	// The default (zero) value is FillRuleFillAll.
 	FillRule FillRule
 
 	// AntiAlias indicates whether the rendering uses anti-alias or not.
@@ -392,6 +461,16 @@ type DrawTrianglesOptions struct {
 	//
 	// The default (zero) value is false.
 	AntiAlias bool
+
+	// DisableMipmaps disables mipmaps.
+	// When Filter is FilterLinear and GeoM shrinks the image, mipmaps are used by default.
+	// Mipmap is useful to render a shrunk image with high quality.
+	// However, mipmaps can be expensive, especially on mobiles.
+	// When DisableMipmaps is true, mipmap is not used.
+	// When Filter is not FilterLinear, DisableMipmaps is ignored.
+	//
+	// The default (zero) value is false.
+	DisableMipmaps bool
 }
 
 // MaxIndicesCount is the maximum number of indices for DrawTriangles and DrawTrianglesShader.
@@ -405,7 +484,12 @@ const MaxIndicesCount = (1 << 16) / 3 * 3
 const MaxIndicesNum = MaxIndicesCount
 
 // MaxVerticesCount is the maximum number of vertices for DrawTriangles and DrawTrianglesShader.
-const MaxVerticesCount = graphics.MaxVerticesCount
+//
+// Deprecated: as of v2.7. Use MaxVertexCount instead.
+const MaxVerticesCount = graphicscommand.MaxVertexCount
+
+// MaxVertexCount is the maximum number of vertices for DrawTriangles and DrawTrianglesShader.
+const MaxVertexCount = graphicscommand.MaxVertexCount
 
 // DrawTriangles draws triangles with the specified vertices and their indices.
 //
@@ -417,11 +501,11 @@ const MaxVerticesCount = graphics.MaxVerticesCount
 // Vertex contains color values, which are interpreted as straight-alpha colors by default.
 // This depends on the option's ColorScaleMode.
 //
-// If len(vertices) is more than MaxVerticesCount, the exceeding part is ignored.
+// If len(vertices) is more than MaxVertexCount, the exceeding part is ignored.
 //
 // If len(indices) is not multiple of 3, DrawTriangles panics.
 //
-// If a value in indices is out of range of vertices, or not less than MaxVerticesCount, DrawTriangles panics.
+// If a value in indices is out of range of vertices, or not less than MaxVertexCount, DrawTriangles panics.
 //
 // The rule in which DrawTriangles works effectively is same as DrawImage's.
 //
@@ -438,9 +522,9 @@ func (i *Image) DrawTriangles(vertices []Vertex, indices []uint16, img *Image, o
 		return
 	}
 
-	if len(vertices) > graphics.MaxVerticesCount {
+	if len(vertices) > graphicscommand.MaxVertexCount {
 		// The last part cannot be specified by indices. Just omit them.
-		vertices = vertices[:graphics.MaxVerticesCount]
+		vertices = vertices[:graphicscommand.MaxVertexCount]
 	}
 	if len(indices)%3 != 0 {
 		panic("ebiten: len(indices) % 3 must be 0")
@@ -448,9 +532,6 @@ func (i *Image) DrawTriangles(vertices []Vertex, indices []uint16, img *Image, o
 	for i, idx := range indices {
 		if int(idx) >= len(vertices) {
 			panic(fmt.Sprintf("ebiten: indices[%d] must be less than len(vertices) (%d) but was %d", i, len(vertices), idx))
-		}
-		if idx >= MaxVerticesCount {
-			panic(fmt.Sprintf("ebiten: indices[%d] must be less than MaxVerticesCount %d but was %d", i, MaxVerticesCount, idx))
 		}
 	}
 
@@ -473,36 +554,40 @@ func (i *Image) DrawTriangles(vertices []Vertex, indices []uint16, img *Image, o
 	vs := i.ensureTmpVertices(len(vertices) * graphics.VertexFloatCount)
 	dst := i
 	if options.ColorScaleMode == ColorScaleModeStraightAlpha {
-		for i, v := range vertices {
-			dx, dy := dst.adjustPositionF32(v.DstX, v.DstY)
+		// Avoid using `for i, v := range vertices` as adding `v` creates a copy from `vertices` unnecessarily on each loop (#3103).
+		for i := range vertices {
+			dx, dy := dst.adjustPositionF32(vertices[i].DstX, vertices[i].DstY)
 			vs[i*graphics.VertexFloatCount] = dx
 			vs[i*graphics.VertexFloatCount+1] = dy
-			sx, sy := img.adjustPositionF32(v.SrcX, v.SrcY)
+			sx, sy := img.adjustPositionF32(vertices[i].SrcX, vertices[i].SrcY)
 			vs[i*graphics.VertexFloatCount+2] = sx
 			vs[i*graphics.VertexFloatCount+3] = sy
-			vs[i*graphics.VertexFloatCount+4] = v.ColorR * v.ColorA * cr
-			vs[i*graphics.VertexFloatCount+5] = v.ColorG * v.ColorA * cg
-			vs[i*graphics.VertexFloatCount+6] = v.ColorB * v.ColorA * cb
-			vs[i*graphics.VertexFloatCount+7] = v.ColorA * ca
+			vs[i*graphics.VertexFloatCount+4] = vertices[i].ColorR * vertices[i].ColorA * cr
+			vs[i*graphics.VertexFloatCount+5] = vertices[i].ColorG * vertices[i].ColorA * cg
+			vs[i*graphics.VertexFloatCount+6] = vertices[i].ColorB * vertices[i].ColorA * cb
+			vs[i*graphics.VertexFloatCount+7] = vertices[i].ColorA * ca
 		}
 	} else {
-		for i, v := range vertices {
-			dx, dy := dst.adjustPositionF32(v.DstX, v.DstY)
+		// See comment above (#3103).
+		for i := range vertices {
+			dx, dy := dst.adjustPositionF32(vertices[i].DstX, vertices[i].DstY)
 			vs[i*graphics.VertexFloatCount] = dx
 			vs[i*graphics.VertexFloatCount+1] = dy
-			sx, sy := img.adjustPositionF32(v.SrcX, v.SrcY)
+			sx, sy := img.adjustPositionF32(vertices[i].SrcX, vertices[i].SrcY)
 			vs[i*graphics.VertexFloatCount+2] = sx
 			vs[i*graphics.VertexFloatCount+3] = sy
-			vs[i*graphics.VertexFloatCount+4] = v.ColorR * cr
-			vs[i*graphics.VertexFloatCount+5] = v.ColorG * cg
-			vs[i*graphics.VertexFloatCount+6] = v.ColorB * cb
-			vs[i*graphics.VertexFloatCount+7] = v.ColorA * ca
+			vs[i*graphics.VertexFloatCount+4] = vertices[i].ColorR * cr
+			vs[i*graphics.VertexFloatCount+5] = vertices[i].ColorG * cg
+			vs[i*graphics.VertexFloatCount+6] = vertices[i].ColorB * cb
+			vs[i*graphics.VertexFloatCount+7] = vertices[i].ColorA * ca
 		}
 	}
-	is := make([]uint16, len(indices))
-	copy(is, indices)
+	is := i.ensureTmpIndices(len(indices))
+	for i := range is {
+		is[i] = uint32(indices[i])
+	}
 
-	srcs := [graphics.ShaderImageCount]*ui.Image{img.image}
+	srcs := [graphics.ShaderSrcImageCount]*ui.Image{img.image}
 
 	useColorM := !colorm.IsIdentity()
 	shader := builtinShader(filter, address, useColorM)
@@ -517,7 +602,11 @@ func (i *Image) DrawTriangles(vertices []Vertex, indices []uint16, img *Image, o
 		})
 	}
 
-	i.image.DrawTriangles(srcs, vs, is, blend, i.adjustedRegion(), [graphics.ShaderImageCount]graphicsdriver.Region{img.adjustedRegion()}, shader.shader, i.tmpUniforms, options.FillRule == EvenOdd, filter != builtinshader.FilterLinear, options.AntiAlias)
+	skipMipmap := options.DisableMipmaps
+	if !skipMipmap {
+		skipMipmap = filter != builtinshader.FilterLinear
+	}
+	i.image.DrawTriangles(srcs, vs, is, blend, i.adjustedBounds(), [graphics.ShaderSrcImageCount]image.Rectangle{img.adjustedBounds()}, shader.shader, i.tmpUniforms, graphicsdriver.FillRule(options.FillRule), skipMipmap, options.AntiAlias, restorable.HintNone)
 }
 
 // DrawTrianglesShaderOptions represents options for DrawTrianglesShader.
@@ -549,11 +638,11 @@ type DrawTrianglesShaderOptions struct {
 
 	// FillRule indicates the rule how an overlapped region is rendered.
 	//
-	// The rule EvenOdd is useful when you want to render a complex polygon.
+	// The rules FillRuleNonZero and FillRuleEvenOdd are useful when you want to render a complex polygon.
 	// A complex polygon is a non-convex polygon like a concave polygon, a polygon with holes, or a self-intersecting polygon.
 	// See examples/vector for actual usages.
 	//
-	// The default (zero) value is FillAll.
+	// The default (zero) value is FillRuleFillAll.
 	FillRule FillRule
 
 	// AntiAlias indicates whether the rendering uses anti-alias or not.
@@ -567,7 +656,7 @@ type DrawTrianglesShaderOptions struct {
 }
 
 // Check the number of images.
-var _ [len(DrawTrianglesShaderOptions{}.Images) - graphics.ShaderImageCount]struct{} = [0]struct{}{}
+var _ [len(DrawTrianglesShaderOptions{}.Images) - graphics.ShaderSrcImageCount]struct{} = [0]struct{}{}
 
 // DrawTrianglesShader draws triangles with the specified vertices and their indices with the specified shader.
 //
@@ -579,15 +668,18 @@ var _ [len(DrawTrianglesShaderOptions{}.Images) - graphics.ShaderImageCount]stru
 // DrawTrianglesShader panics.
 // If one of the specified image is non-nil and is disposed, DrawTrianglesShader panics.
 //
-// If len(vertices) is more than MaxVerticesCount, the exceeding part is ignored.
+// If len(vertices) is more than MaxVertexCount, the exceeding part is ignored.
 //
 // If len(indices) is not multiple of 3, DrawTrianglesShader panics.
 //
-// If a value in indices is out of range of vertices, or not less than MaxVerticesCount, DrawTrianglesShader panics.
+// If a value in indices is out of range of vertices, or not less than MaxVertexCount, DrawTrianglesShader panics.
 //
 // When a specified image is non-nil and is disposed, DrawTrianglesShader panics.
 //
 // If a specified uniform variable's length or type doesn't match with an expected one, DrawTrianglesShader panics.
+//
+// Even if a result is an invalid color as a premultiplied-alpha color, i.e. an alpha value exceeds other color values,
+// the value is kept and is not clamped.
 //
 // When the image i is disposed, DrawTrianglesShader does nothing.
 func (i *Image) DrawTrianglesShader(vertices []Vertex, indices []uint16, shader *Shader, options *DrawTrianglesShaderOptions) {
@@ -597,9 +689,13 @@ func (i *Image) DrawTrianglesShader(vertices []Vertex, indices []uint16, shader 
 		return
 	}
 
-	if len(vertices) > graphics.MaxVerticesCount {
+	if shader.isDisposed() {
+		panic("ebiten: the given shader to DrawTrianglesShader must not be disposed")
+	}
+
+	if len(vertices) > graphicscommand.MaxVertexCount {
 		// The last part cannot be specified by indices. Just omit them.
-		vertices = vertices[:graphics.MaxVerticesCount]
+		vertices = vertices[:graphicscommand.MaxVertexCount]
 	}
 	if len(indices)%3 != 0 {
 		panic("ebiten: len(indices) % 3 must be 0")
@@ -607,9 +703,6 @@ func (i *Image) DrawTrianglesShader(vertices []Vertex, indices []uint16, shader 
 	for i, idx := range indices {
 		if int(idx) >= len(vertices) {
 			panic(fmt.Sprintf("ebiten: indices[%d] must be less than len(vertices) (%d) but was %d", i, len(vertices), idx))
-		}
-		if idx >= MaxVerticesCount {
-			panic(fmt.Sprintf("ebiten: indices[%d] must be less than MaxVerticesCount %d but was %d", i, MaxVerticesCount, idx))
 		}
 	}
 
@@ -627,25 +720,33 @@ func (i *Image) DrawTrianglesShader(vertices []Vertex, indices []uint16, shader 
 	vs := i.ensureTmpVertices(len(vertices) * graphics.VertexFloatCount)
 	dst := i
 	src := options.Images[0]
-	for i, v := range vertices {
-		dx, dy := dst.adjustPositionF32(v.DstX, v.DstY)
+	// Avoid using `for i, v := range vertices` as adding `v` creates a copy from `vertices` unnecessarily on each loop (#3103).
+	for i := range vertices {
+		dx, dy := dst.adjustPositionF32(vertices[i].DstX, vertices[i].DstY)
 		vs[i*graphics.VertexFloatCount] = dx
 		vs[i*graphics.VertexFloatCount+1] = dy
-		sx, sy := v.SrcX, v.SrcY
+		sx, sy := vertices[i].SrcX, vertices[i].SrcY
 		if src != nil {
 			sx, sy = src.adjustPositionF32(sx, sy)
 		}
 		vs[i*graphics.VertexFloatCount+2] = sx
 		vs[i*graphics.VertexFloatCount+3] = sy
-		vs[i*graphics.VertexFloatCount+4] = v.ColorR
-		vs[i*graphics.VertexFloatCount+5] = v.ColorG
-		vs[i*graphics.VertexFloatCount+6] = v.ColorB
-		vs[i*graphics.VertexFloatCount+7] = v.ColorA
+		vs[i*graphics.VertexFloatCount+4] = vertices[i].ColorR
+		vs[i*graphics.VertexFloatCount+5] = vertices[i].ColorG
+		vs[i*graphics.VertexFloatCount+6] = vertices[i].ColorB
+		vs[i*graphics.VertexFloatCount+7] = vertices[i].ColorA
+		vs[i*graphics.VertexFloatCount+8] = vertices[i].Custom0
+		vs[i*graphics.VertexFloatCount+9] = vertices[i].Custom1
+		vs[i*graphics.VertexFloatCount+10] = vertices[i].Custom2
+		vs[i*graphics.VertexFloatCount+11] = vertices[i].Custom3
 	}
-	is := make([]uint16, len(indices))
-	copy(is, indices)
 
-	var imgs [graphics.ShaderImageCount]*ui.Image
+	is := i.ensureTmpIndices(len(indices))
+	for i := range is {
+		is[i] = uint32(indices[i])
+	}
+
+	var imgs [graphics.ShaderSrcImageCount]*ui.Image
 	var imgSize image.Point
 	for i, img := range options.Images {
 		if img == nil {
@@ -667,18 +768,18 @@ func (i *Image) DrawTrianglesShader(vertices []Vertex, indices []uint16, shader 
 		imgs[i] = img.image
 	}
 
-	var srcRegions [graphics.ShaderImageCount]graphicsdriver.Region
+	var srcRegions [graphics.ShaderSrcImageCount]image.Rectangle
 	for i, img := range options.Images {
 		if img == nil {
 			continue
 		}
-		srcRegions[i] = img.adjustedRegion()
+		srcRegions[i] = img.adjustedBounds()
 	}
 
 	i.tmpUniforms = i.tmpUniforms[:0]
 	i.tmpUniforms = shader.appendUniforms(i.tmpUniforms, options.Uniforms)
 
-	i.image.DrawTriangles(imgs, vs, is, blend, i.adjustedRegion(), srcRegions, shader.shader, i.tmpUniforms, options.FillRule == EvenOdd, true, options.AntiAlias)
+	i.image.DrawTriangles(imgs, vs, is, blend, i.adjustedBounds(), srcRegions, shader.shader, i.tmpUniforms, graphicsdriver.FillRule(options.FillRule), true, options.AntiAlias, restorable.HintNone)
 }
 
 // DrawRectShaderOptions represents options for DrawRectShader.
@@ -719,7 +820,7 @@ type DrawRectShaderOptions struct {
 }
 
 // Check the number of images.
-var _ [len(DrawRectShaderOptions{}.Images)]struct{} = [graphics.ShaderImageCount]struct{}{}
+var _ [len(DrawRectShaderOptions{}.Images)]struct{} = [graphics.ShaderSrcImageCount]struct{}{}
 
 // DrawRectShader draws a rectangle with the specified width and height with the specified shader.
 //
@@ -730,15 +831,18 @@ var _ [len(DrawRectShaderOptions{}.Images)]struct{} = [graphics.ShaderImageCount
 //
 // If a specified uniform variable's length or type doesn't match with an expected one, DrawRectShader panics.
 //
-// In a shader, texCoord in Fragment represents a position in a source image.
-// If no source images are specified, texCoord represents the position from (0, 0) to (width, height) in pixels.
-// If the unit is pixels by a compiler directive `//kage:unit pixelss`, texCoord values are valid.
-// If the unit is texels (default), texCoord values still take from (0, 0) to (width, height),
-// but these are invalid since texCoord is expected to be in texels in the texel-unit mode.
+// In a shader, srcPos in Fragment represents a position in a source image.
+// If no source images are specified, srcPos represents the position from (0, 0) to (width, height) in pixels.
+// If the unit is pixels by a compiler directive `//kage:unit pixelss`, srcPos values are valid.
+// If the unit is texels (default), srcPos values still take from (0, 0) to (width, height),
+// but these are invalid since srcPos is expected to be in texels in the texel-unit mode.
 // This behavior is preserved for backward compatibility. It is recommended to use the pixel-unit mode to avoid confusion.
 //
 // If no source images are specified, imageSrc0Size returns a valid size only when the unit is pixels,
 // but always returns 0 when the unit is texels (default).
+//
+// Even if a result is an invalid color as a premultiplied-alpha color, i.e. an alpha value exceeds other color values,
+// the value is kept and is not clamped.
 //
 // When the image i is disposed, DrawRectShader does nothing.
 func (i *Image) DrawRectShader(width, height int, shader *Shader, options *DrawRectShaderOptions) {
@@ -746,6 +850,10 @@ func (i *Image) DrawRectShader(width, height int, shader *Shader, options *DrawR
 
 	if i.isDisposed() {
 		return
+	}
+
+	if shader.isDisposed() {
+		panic("ebiten: the given shader to DrawRectShader must not be disposed")
 	}
 
 	if options == nil {
@@ -759,7 +867,7 @@ func (i *Image) DrawRectShader(width, height int, shader *Shader, options *DrawR
 		blend = options.CompositeMode.blend().internalBlend()
 	}
 
-	var imgs [graphics.ShaderImageCount]*ui.Image
+	var imgs [graphics.ShaderSrcImageCount]*ui.Image
 	for i, img := range options.Images {
 		if img == nil {
 			continue
@@ -773,20 +881,17 @@ func (i *Image) DrawRectShader(width, height int, shader *Shader, options *DrawR
 		imgs[i] = img.image
 	}
 
-	var srcRegions [graphics.ShaderImageCount]graphicsdriver.Region
+	var srcRegions [graphics.ShaderSrcImageCount]image.Rectangle
 	for i, img := range options.Images {
 		if img == nil {
 			if shader.unit == shaderir.Pixels && i == 0 {
 				// Give the source size as pixels only when the unit is pixels so that users can get the source size via imageSrc0Size (#2166).
 				// With the texel mode, the imageSrc0Origin and imageSrc0Size values should be in texels so the source position in pixels would not match.
-				srcRegions[i] = graphicsdriver.Region{
-					Width:  float32(width),
-					Height: float32(height),
-				}
+				srcRegions[i] = image.Rect(0, 0, width, height)
 			}
 			continue
 		}
-		srcRegions[i] = img.adjustedRegion()
+		srcRegions[i] = img.adjustedBounds()
 	}
 
 	geoM := options.GeoM
@@ -797,14 +902,24 @@ func (i *Image) DrawRectShader(width, height int, shader *Shader, options *DrawR
 	cr, cg, cb, ca := options.ColorScale.elements()
 	vs := i.ensureTmpVertices(4 * graphics.VertexFloatCount)
 
-	// Do not use srcRegions[0].Width and srcRegions[0].Height as these might be empty.
-	graphics.QuadVertices(vs, srcRegions[0].X, srcRegions[0].Y, srcRegions[0].X+float32(width), srcRegions[0].Y+float32(height), a, b, c, d, tx, ty, cr, cg, cb, ca)
+	// Do not use srcRegions[0].Dx() and srcRegions[0].Dy() as these might be empty.
+	graphics.QuadVerticesFromSrcAndMatrix(vs,
+		float32(srcRegions[0].Min.X), float32(srcRegions[0].Min.Y),
+		float32(srcRegions[0].Min.X+width), float32(srcRegions[0].Min.Y+height),
+		a, b, c, d, tx, ty, cr, cg, cb, ca)
 	is := graphics.QuadIndices()
 
 	i.tmpUniforms = i.tmpUniforms[:0]
 	i.tmpUniforms = shader.appendUniforms(i.tmpUniforms, options.Uniforms)
 
-	i.image.DrawTriangles(imgs, vs, is, blend, i.adjustedRegion(), srcRegions, shader.shader, i.tmpUniforms, false, true, false)
+	dr := i.adjustedBounds()
+	hint := restorable.HintNone
+	// Do not use srcRegions[0].Dx() and srcRegions[0].Dy() as these might be empty.
+	if overwritesDstRegion(options.Blend, dr, geoM, srcRegions[0].Min.X, srcRegions[0].Min.Y, srcRegions[0].Min.X+width, srcRegions[0].Min.Y+height) {
+		hint = restorable.HintOverwriteDstRegion
+	}
+
+	i.image.DrawTriangles(imgs, vs, is, blend, dr, srcRegions, shader.shader, i.tmpUniforms, graphicsdriver.FillRuleFillAll, true, false, hint)
 }
 
 // SubImage returns an image representing the portion of the image p visible through r.
@@ -948,6 +1063,9 @@ func (i *Image) at(x, y int) (r, g, b, a byte) {
 //
 // Set implements the standard draw.Image's Set.
 //
+// Even if a result is an invalid color as a premultiplied-alpha color, i.e. an alpha value exceeds other color values,
+// the value is kept and is not clamped.
+//
 // If the image is disposed, Set does nothing.
 func (i *Image) Set(x, y int, clr color.Color) {
 	i.copyCheck()
@@ -974,7 +1092,9 @@ func (i *Image) Set(x, y int, clr color.Color) {
 //
 // If the image is a sub-image, Dispose does nothing.
 //
-// When the image is disposed, Dispose does nothing.
+// If the image is disposed, Dispose does nothing.
+//
+// Deprecated: as of v2.7. Use Deallocate instead.
 func (i *Image) Dispose() {
 	i.copyCheck()
 
@@ -984,8 +1104,31 @@ func (i *Image) Dispose() {
 	if i.isSubImage() {
 		return
 	}
-	i.image.MarkDisposed()
+	i.image.Deallocate()
 	i.image = nil
+}
+
+// Deallocate clears the image and deallocates the internal state of the image.
+// Even after Deallocate is called, the image is still available.
+// In this case, the image's internal state is allocated again.
+//
+// Usually, you don't have to call Deallocate since the internal state is automatically released by GC.
+// However, if you are sure that the image is no longer used but not sure how this image object is referred,
+// you can call Deallocate to make sure that the internal state is deallocated.
+//
+// If the image is a sub-image, Deallocate does nothing.
+//
+// If the image is disposed, Deallocate does nothing.
+func (i *Image) Deallocate() {
+	i.copyCheck()
+
+	if i.isDisposed() {
+		return
+	}
+	if i.isSubImage() {
+		return
+	}
+	i.image.Deallocate()
 }
 
 // WritePixels replaces the pixels of the image.
@@ -996,6 +1139,9 @@ func (i *Image) Dispose() {
 // If len(pix) is not correct, WritePixels panics.
 //
 // WritePixels also works on a sub-image.
+//
+// Even if a result is an invalid color as a premultiplied-alpha color, i.e. an alpha value exceeds other color values,
+// the value is kept and is not clamped.
 //
 // When the image is disposed, WritePixels does nothing.
 func (i *Image) WritePixels(pixels []byte) {
@@ -1079,7 +1225,7 @@ func newImage(bounds image.Rectangle, imageType atlas.ImageType) *Image {
 	}
 
 	i := &Image{
-		image:  ui.NewImage(width, height, imageType),
+		image:  ui.Get().NewImage(width, height, imageType),
 		bounds: bounds,
 	}
 	i.addr = i
@@ -1201,6 +1347,13 @@ func (i *Image) ensureTmpVertices(n int) []float32 {
 		i.tmpVertices = make([]float32, n)
 	}
 	return i.tmpVertices[:n]
+}
+
+func (i *Image) ensureTmpIndices(n int) []uint32 {
+	if cap(i.tmpIndices) < n {
+		i.tmpIndices = make([]uint32, n)
+	}
+	return i.tmpIndices[:n]
 }
 
 // private implements FinalScreen.

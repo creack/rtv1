@@ -60,7 +60,7 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 				return nil, false
 			}
 			stmts = append(stmts, ss...)
-		case token.ADD_ASSIGN, token.SUB_ASSIGN, token.MUL_ASSIGN, token.QUO_ASSIGN, token.REM_ASSIGN, token.AND_ASSIGN, token.OR_ASSIGN, token.XOR_ASSIGN, token.AND_NOT_ASSIGN:
+		case token.ADD_ASSIGN, token.SUB_ASSIGN, token.MUL_ASSIGN, token.QUO_ASSIGN, token.REM_ASSIGN, token.AND_ASSIGN, token.OR_ASSIGN, token.XOR_ASSIGN, token.AND_NOT_ASSIGN, token.SHL_ASSIGN, token.SHR_ASSIGN:
 			rhs, rts, ss, ok := cs.parseExpr(block, fname, stmt.Rhs[0], true)
 			if !ok {
 				return nil, false
@@ -100,6 +100,10 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 				op = shaderir.Or
 			case token.XOR_ASSIGN:
 				op = shaderir.Xor
+			case token.SHL_ASSIGN:
+				op = shaderir.LeftShift
+			case token.SHR_ASSIGN:
+				op = shaderir.RightShift
 			default:
 				cs.addError(stmt.Pos(), fmt.Sprintf("unexpected token: %s", stmt.Tok))
 				return nil, false
@@ -110,14 +114,15 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 					cs.addError(stmt.Pos(), fmt.Sprintf("invalid operation: operator / not defined on %s", rts[0].String()))
 					return nil, false
 				}
-				if op == shaderir.And || op == shaderir.Or || op == shaderir.Xor {
+				if op == shaderir.And || op == shaderir.Or || op == shaderir.Xor || op == shaderir.LeftShift || op == shaderir.RightShift {
 					if lts[0].Main != shaderir.Int && !lts[0].IsIntVector() {
 						cs.addError(stmt.Pos(), fmt.Sprintf("invalid operation: operator %s not defined on %s", stmt.Tok, lts[0].String()))
+						return nil, false
 					}
 					if rts[0].Main != shaderir.Int && !rts[0].IsIntVector() {
 						cs.addError(stmt.Pos(), fmt.Sprintf("invalid operation: operator %s not defined on %s", stmt.Tok, rts[0].String()))
+						return nil, false
 					}
-					return nil, false
 				}
 				if lts[0].Main == shaderir.Int && rhs[0].Const != nil {
 					if !cs.forceToInt(stmt, &rhs[0]) {
@@ -137,7 +142,7 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 						}
 					}
 				case shaderir.Float:
-					if op == shaderir.And || op == shaderir.Or || op == shaderir.Xor {
+					if op == shaderir.And || op == shaderir.Or || op == shaderir.Xor || op == shaderir.LeftShift || op == shaderir.RightShift {
 						cs.addError(stmt.Pos(), fmt.Sprintf("invalid operation: operator %s not defined on %s", stmt.Tok, lts[0].String()))
 					} else if rhs[0].Const != nil &&
 						(rts[0].Main == shaderir.None || rts[0].Main == shaderir.Float) &&
@@ -148,7 +153,7 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 						return nil, false
 					}
 				case shaderir.Vec2, shaderir.Vec3, shaderir.Vec4, shaderir.Mat2, shaderir.Mat3, shaderir.Mat4:
-					if op == shaderir.And || op == shaderir.Or || op == shaderir.Xor {
+					if op == shaderir.And || op == shaderir.Or || op == shaderir.Xor || op == shaderir.LeftShift || op == shaderir.RightShift {
 						cs.addError(stmt.Pos(), fmt.Sprintf("invalid operation: operator %s not defined on %s", stmt.Tok, lts[0].String()))
 					} else if (op == shaderir.MatrixMul || op == shaderir.Div) &&
 						(rts[0].Main == shaderir.Float ||
@@ -247,12 +252,16 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 		if !ok {
 			return nil, false
 		}
-		if len(ts) != 1 || ts[0].Main != shaderir.Bool {
+		if len(ts) != 1 {
 			var tss []string
 			for _, t := range ts {
 				tss = append(tss, t.String())
 			}
 			cs.addError(stmt.Pos(), fmt.Sprintf("if-condition must be bool but: %s", strings.Join(tss, ", ")))
+			return nil, false
+		}
+		if !(ts[0].Main == shaderir.Bool || (ts[0].Main == shaderir.None && exprs[0].Const != nil && exprs[0].Const.Kind() == gconstant.Bool)) {
+			cs.addError(stmt.Pos(), fmt.Sprintf("if-condition must be bool but: %s", ts[0].String()))
 			return nil, false
 		}
 		stmts = append(stmts, ss...)
@@ -288,7 +297,7 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 		})
 
 	case *ast.IncDecStmt:
-		exprs, _, ss, ok := cs.parseExpr(block, fname, stmt.X, true)
+		exprs, ts, ss, ok := cs.parseExpr(block, fname, stmt.X, true)
 		if !ok {
 			return nil, false
 		}
@@ -299,6 +308,16 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 			op = shaderir.Add
 		case token.DEC:
 			op = shaderir.Sub
+		}
+		var c gconstant.Value
+		switch {
+		case ts[0].Main == shaderir.Int, ts[0].IsIntVector():
+			c = gconstant.MakeInt64(1)
+		case ts[0].Main == shaderir.Float, ts[0].IsFloatVector():
+			c = gconstant.MakeFloat64(1)
+		default:
+			cs.addError(stmt.Pos(), fmt.Sprintf("invalid operation %s (non-numeric type %s)", stmt.Tok.String(), ts[0].String()))
+			return nil, false
 		}
 		stmts = append(stmts, shaderir.Stmt{
 			Type: shaderir.Assign,
@@ -311,7 +330,7 @@ func (cs *compileState) parseStmt(block *block, fname string, stmt ast.Stmt, inP
 						exprs[0],
 						{
 							Type:  shaderir.NumberExpr,
-							Const: gconstant.MakeInt64(1),
+							Const: c,
 						},
 					},
 				},
@@ -478,8 +497,8 @@ func (cs *compileState) assign(block *block, fname string, pos token.Pos, lhs, r
 	var rhsTypes []shaderir.Type
 	allblank := true
 
-	for i, e := range lhs {
-		if len(lhs) == len(rhs) {
+	if len(lhs) == len(rhs) {
+		for i, e := range lhs {
 			// Prase RHS first for the order of the statements.
 			r, rts, ss, ok := cs.parseExpr(block, fname, rhs[i], true)
 			if !ok {
@@ -488,6 +507,10 @@ func (cs *compileState) assign(block *block, fname string, pos token.Pos, lhs, r
 			stmts = append(stmts, ss...)
 
 			if define {
+				if _, ok := e.(*ast.Ident); !ok {
+					cs.addError(pos, "non-name on the left side of :=")
+					return nil, false
+				}
 				name := e.(*ast.Ident).Name
 				if name != "_" {
 					for _, v := range block.vars {
@@ -564,6 +587,12 @@ func (cs *compileState) assign(block *block, fname string, pos token.Pos, lhs, r
 					cs.addError(pos, fmt.Sprintf("cannot use type %s as type %s in variable declaration", rts[i].String(), lts[i].String()))
 					return nil, false
 				}
+				switch lts[0].Main {
+				case shaderir.Int:
+					r[i].Const = gconstant.ToInt(r[i].Const)
+				case shaderir.Float:
+					r[i].Const = gconstant.ToFloat(r[i].Const)
+				}
 			}
 
 			if len(lhs) == 1 {
@@ -603,21 +632,26 @@ func (cs *compileState) assign(block *block, fname string, pos token.Pos, lhs, r
 						},
 					})
 			}
-		} else {
-			if i == 0 {
-				var ss []shaderir.Stmt
-				var ok bool
-				rhsExprs, rhsTypes, ss, ok = cs.parseExpr(block, fname, rhs[0], true)
-				if !ok {
+		}
+	} else {
+		var ss []shaderir.Stmt
+		var ok bool
+		rhsExprs, rhsTypes, ss, ok = cs.parseExpr(block, fname, rhs[0], true)
+		if !ok {
+			return nil, false
+		}
+		if len(lhs) != len(rhsExprs) {
+			cs.addError(pos, fmt.Sprintf("assignment mismatch: %d variables but %d", len(lhs), len(rhsExprs)))
+			return nil, false
+		}
+		stmts = append(stmts, ss...)
+
+		for i, e := range lhs {
+			if define {
+				if _, ok := e.(*ast.Ident); !ok {
+					cs.addError(pos, "non-name on the left side of :=")
 					return nil, false
 				}
-				if len(rhsExprs) != len(lhs) {
-					cs.addError(pos, "single-value context and multiple-value context cannot be mixed")
-				}
-				stmts = append(stmts, ss...)
-			}
-
-			if define {
 				name := e.(*ast.Ident).Name
 				if name != "_" {
 					for _, v := range block.vars {
