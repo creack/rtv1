@@ -25,7 +25,7 @@ jobs:
       - name: Build
         run: |
           GOOS=js GOARCH=wasm go build -o ./.github/assets/out.wasm .
-          cp $(go env GOROOT)/misc/wasm/wasm_exec.js ./.github/assets
+          cp $(go env GOROOT)/lib/wasm/wasm_exec.js ./.github/assets
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
