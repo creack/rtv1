@@ -74,13 +74,13 @@ func (g *Game) Update() error {
 		g.hideHelp = !g.hideHelp
 
 	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyW):
-		g.cameraLookAt.z += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyS):
-		g.cameraLookAt.z -= 1.
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyA):
 		g.cameraLookAt.y += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyD):
+	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyS):
 		g.cameraLookAt.y -= 1.
+	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyA):
+		g.cameraLookAt.z += 1.
+	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyD):
+		g.cameraLookAt.z -= 1.
 	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyQ):
 		g.cameraLookAt.x += 1.
 	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyE):
@@ -99,18 +99,24 @@ func (g *Game) Update() error {
 	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyPageDown):
 		g.sphereOrigins[1].z -= 1.
 
-	case ebiten.IsKeyPressed(ebiten.KeyW):
-		g.cameraOrigin.z += 1.
 	case ebiten.IsKeyPressed(ebiten.KeyS):
+		g.cameraOrigin.z += 1.
+		g.cameraLookAt.z += 1.
+	case ebiten.IsKeyPressed(ebiten.KeyW):
 		g.cameraOrigin.z -= 1.
-	case ebiten.IsKeyPressed(ebiten.KeyA):
-		g.cameraOrigin.y += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyD):
-		g.cameraOrigin.y -= 1.
+		g.cameraLookAt.z -= 1.
 	case ebiten.IsKeyPressed(ebiten.KeyQ):
-		g.cameraOrigin.x += 1.
+		g.cameraOrigin.y += 1.
+		g.cameraLookAt.y += 1.
 	case ebiten.IsKeyPressed(ebiten.KeyE):
+		g.cameraOrigin.y -= 1.
+		g.cameraLookAt.y -= 1.
+	case ebiten.IsKeyPressed(ebiten.KeyA):
+		g.cameraOrigin.x += 1.
+		g.cameraLookAt.x += 1.
+	case ebiten.IsKeyPressed(ebiten.KeyD):
 		g.cameraOrigin.x -= 1.
+		g.cameraLookAt.x -= 1.
 
 	case ebiten.IsKeyPressed(ebiten.KeyUp):
 		g.sphereOrigins[0].y += 1.
@@ -446,8 +452,8 @@ func main() {
 	ebiten.SetWindowTitle("RTv1 - Shader - Go")
 	g := &Game{
 		forceRedraw:  make(chan struct{}, 1),
-		cameraOrigin: newVec3(3, 2, 4),
-		cameraLookAt: newVec3(-1, 0.5, 0),
+		cameraOrigin: newVec3(0, 10, 10),
+		cameraLookAt: newVec3(0, 0, 0),
 		sphereOrigins: []vec3{
 			newVec3(0, 1, -0.25),
 			newVec3(-1.0, 0.5, 1.5),
