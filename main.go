@@ -433,7 +433,6 @@ func (g *Game) compileShader() {
 	str := preprocess()
 	if runtime.GOOS != "js" {
 		fmt.Println(str)
-		return
 	}
 	s, err := ebiten.NewShader([]byte(str))
 	duration := time.Since(now)
