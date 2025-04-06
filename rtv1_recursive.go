@@ -1,5 +1,8 @@
 package main
 
+// This file contains the recursive functions used for the raytracer.
+// It compiles to both Go and Kage shader (after pre-processing).
+
 //rec:func:trace
 func trace(camera mat4, rayDir vec3, lights LightsT, things ThingsT, depth int) vec4 {
 	rayStart, _, _, _ := getCamera(camera) //nolint:dogsled // Expected.
@@ -16,21 +19,20 @@ func trace(camera mat4, rayDir vec3, lights LightsT, things ThingsT, depth int) 
 
 //rec:func:shade
 func shade(rayStart, rayDir vec3, closestThing mat4, dist float, lights LightsT, things ThingsT, depth int) vec4 {
-	d := rayDir
-	pos := add3(rayStart, scale3(d, dist))
+	pos := add3(rayStart, scale3(rayDir, dist))
 	var normal vec3
-	if getThingType(closestThing) == 1 {
+	if t := getThingType(closestThing); t == SphereType {
 		center, _, _, _ := getSphere(closestThing)
 		normal = normalSphere(pos, center)
-	} else {
-		center, _, _, _ := getSphere(closestThing)
+	} else if t == PlaneType {
+		center, _, _, _ := getPlane(closestThing)
 		normal = normalPlane(pos, center)
 	}
 
-	nd := dot3(normal, d)
+	nd := dot3(normal, rayDir)
 	snd := scale3(normal, nd)
 	s2nd := scale3(snd, 2)
-	reflectDir := sub3(d, s2nd)
+	reflectDir := sub3(rayDir, s2nd)
 
 	backgroundColor0 := newVec4(0, 0, 0, 0)
 

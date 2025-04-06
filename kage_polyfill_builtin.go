@@ -2,9 +2,9 @@ package main
 
 import "math"
 
-type ThingsT [3]mat4
-
-type LightsT [4]mat4
+// This file is a wrapper for Kage. It mirror the shaderlib_builtin.kage file to allow
+// for the shader to be compile in Go.
+// In this part, we have the default built-in functions and types.
 
 type vec2 struct{ x, y float }
 
@@ -37,7 +37,6 @@ type float = float64
 type mat4 [4]vec4
 
 func length3(v vec3) float {
-	return sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
 	return sqrt(dot3(v, v))
 }
 
@@ -161,17 +160,4 @@ func add4(v1, v2 vec4) vec4 {
 		v1.z+v2.z,
 		1, //v1.w+v2.w,
 	)
-}
-
-//nolint:unparam // Keeping for reference.
-func getSphere(in mat4) (center vec3, radius, radius2 float, color vec4) {
-	return in[0].vec3, in[0].w, in[1].w, in[2]
-}
-
-func getLight(in mat4) (center vec3, color vec4) {
-	return in[0].vec3, in[2]
-}
-
-func getCamera(in mat4) (center, forward, right, up vec3) {
-	return in[0].vec3, in[1].vec3, in[2].vec3, in[3].vec3
 }

@@ -2,17 +2,26 @@ package main
 
 //kage:unit pixels
 
+// This file is the main RTv1 logic. It compiles to both Go and Kage shader (after pre-processing).
+
+var UniScreenWidth, UniScreenHeight int
+
 //nolint:gochecknoglobals,revive // Uniform variables must be global.
 var UniCameraOrigin, UniCameraLookAt vec3
 
-//nolint:gochecknoglobals,revive // Uniform variables must be global.
-var UniSphereOrigins1, UniSphereOrigins2 vec3
-
+// getThingType returns the type of the thing.
+// By convention, it is stored in the z component of the second column of the mat4.
 func getThingType(thing mat4) float {
 	return thing[1].z
 }
 
 const maxDepth = 5
+
+const (
+	SphereType = 1
+	PlaneType  = 2
+	LightType  = 3
+)
 
 // center: s[0].xyz
 // radius: s[0].w
@@ -23,7 +32,7 @@ const maxDepth = 5
 func newSphere(center vec3, radius float, col vec4) mat4 {
 	return newMat4(
 		newVec4(center.x, center.y, center.z, radius),
-		newVec4(250., 0, 1, radius*radius),
+		newVec4(250., 0, SphereType, radius*radius),
 		col,
 		newVec4(0.3, 0.3, 0.3, 1),
 	)
@@ -37,7 +46,7 @@ func newSphere(center vec3, radius float, col vec4) mat4 {
 func newPlane(center vec3, offset float, col vec4) mat4 {
 	return newMat4(
 		newVec4(center.x, center.y, center.z, offset),
-		newVec4(150, 0, 2, 0),
+		newVec4(150, 0, PlaneType, 0),
 		col,
 		newVec4(1, 1, 1, 1),
 	)
@@ -46,7 +55,7 @@ func newPlane(center vec3, offset float, col vec4) mat4 {
 func newLight(center vec3, color vec4) mat4 {
 	return newMat4(
 		newVec4(center.x, center.y, center.z, 0),
-		newVec4(0, 0, 3, 0),
+		newVec4(0, 0, LightType, 0),
 		color,
 		newVec4(0, 0, 0, 0),
 	)
@@ -70,19 +79,17 @@ func newCamera(camStart, camLookAt vec3) mat4 {
 //
 //nolint:revive // Unexported return is required by the shader API.
 func Fragment(position vec4, _ vec2, _ vec4) vec4 {
-	width := 800
-	height := 600
+	width := UniScreenWidth
+	height := UniScreenHeight
 	x := int(position.x)
 	y := int(position.y)
 
-	var things ThingsT
-	UniSphereOrigins := [2]vec3{UniSphereOrigins1, UniSphereOrigins2}
-	// for i := 0; i < len(UniSphereOrigins); i++ {
-	// 	things[i] = newSphere(UniSphereOrigins[i], 10, newVec4(1, 1, 0, 1))
-	// }
-	things[0] = newPlane(newVec3(0, 1.0, 0), 0, newVec4(1, 1, 1, 1))
-	things[1] = newSphere(UniSphereOrigins[0], 1, newVec4(1, 1, 0, 1))
-	things[2] = newSphere(UniSphereOrigins[1], 0.5, newVec4(1, 0, 0, 1))
+	things := ThingsT{
+		newPlane(newVec3(0, 1.0, 0), 0, newVec4(1, 1, 1, 1)),
+		newSphere(newVec3(0, 1, -0.25), 1, newVec4(1, 1, 0, 1)),
+		newSphere(newVec3(-1.0, 0.5, 1.5), 0.5, newVec4(1, 0, 0, 1)),
+	}
+
 	lights := LightsT{
 		// newLight(newVec3(-2.0, 2.5, 0), newVec4(1, 1, 1, 1)),
 		newLight(newVec3(-2.0, 2.5, 0), newVec4(0.49, 0.07, 0.07, 1)),
@@ -96,7 +103,6 @@ func Fragment(position vec4, _ vec2, _ vec4) vec4 {
 	rayDir := initRay(width, height, x, y, camera)
 	out := trace(camera, rayDir, lights, things, 0)
 
-	//return newVec4(1, 1, 1, 1)
 	return out
 }
 
@@ -182,10 +188,12 @@ func hitSphere(rayStart, rayDir vec3, thing mat4) float {
 }
 
 func intersect(rayStart, rayDir vec3, thing mat4) float {
-	if getThingType(thing) == 1 {
+	if t := getThingType(thing); t == SphereType {
 		return hitSphere(rayStart, rayDir, thing)
+	} else if t == PlaneType {
+		return hitPlane(rayStart, rayDir, thing)
 	}
-	return hitPlane(rayStart, rayDir, thing)
+	return -1.
 }
 
 func intersection(rayStart, rayDir vec3, things ThingsT) (closestThing mat4, closest float) {
@@ -239,21 +247,20 @@ func addLight(thing mat4, pos, norm, rd vec3, col vec4, light mat4, things Thing
 	scolor := newVec4(0, 0, 0, 1) // defaultColor.
 	if specular > 0 {
 		roughness := 0.
-		if getThingType(thing) == 1 {
+		if t := getThingType(thing); t == SphereType {
 			roughness = roughnessSphere(thing, pos)
-		} else {
+		} else if t == PlaneType {
 			roughness = roughnessPlane(thing, pos)
+		} else {
+			roughness = -1.
 		}
 		scolor = scale4(lightColor, pow(specular, roughness))
 	}
-	var surfaceSpecular vec4
-	var surfaceDiffuse vec4
-	_ = surfaceSpecular
-	_ = surfaceDiffuse
-	if getThingType(thing) == 1 {
+	var surfaceSpecular, surfaceDiffuse vec4
+	if t := getThingType(thing); t == SphereType {
 		surfaceSpecular = specularSphere(thing, pos)
 		surfaceDiffuse = diffuseSphere(thing, pos)
-	} else {
+	} else if t == PlaneType {
 		surfaceSpecular = specularPlane(thing, pos)
 		surfaceDiffuse = diffusePlane(thing, pos)
 	}

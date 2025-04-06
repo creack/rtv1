@@ -3,6 +3,8 @@
 
 package main
 
+// This file create a Go compatible wrapper mapping to the Kage native functions/types for the builtins.
+
 const pi = 3.14159265358979323846264338327950288419716939937510582097494459 // https://oeis.org/A000796
 
 func newVec3(x, y, z float) vec3 {
@@ -55,16 +57,4 @@ func length3(v vec3) float {
 
 func dot3(v1, v2 vec3) float {
   return dot(v1, v2)
-}
-
-func getSphere(in mat4) (center vec3, radius, radius2 float, color vec4) {
-	return in[0].xyz, in[0].w, in[1].w, in[2]
-}
-
-func getLight(in mat4) (center vec3, color vec4) {
-	return in[0].xyz, in[2]
-}
-
-func getCamera(in mat4) (center, forward, right, up vec3) {
-	return in[0].xyz, in[1].xyz, in[2].xyz, in[3].xyz
 }

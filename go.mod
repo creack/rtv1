@@ -2,7 +2,10 @@ module go.creack.net/rtv1
 
 go 1.24.0
 
-require github.com/hajimehoshi/ebiten/v2 v2.8.7
+require (
+	github.com/hajimehoshi/ebiten/v2 v2.8.7
+	golang.org/x/image v0.25.0
+)
 
 require (
 	github.com/ebitengine/gomobile v0.0.0-20250329061421-6d0a8e981e4c // indirect
