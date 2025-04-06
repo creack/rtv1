@@ -37,8 +37,12 @@ var (
 	CameraForward  Vector3
 	CameraRight    Vector3
 	CameraUp       Vector3
-	Yaw            float64 = -math.Pi / 2 // Start looking in -Z direction
-	Pitch          float64 = 0
+)
+
+var (
+	Yaw   float64 = -math.Pi / 2 // Start looking in -Z direction
+	Pitch float64 = 0
+	Roll  float64 = 0
 )
 
 // UpdateCameraVectors updates the camera orientation vectors based on yaw and pitch

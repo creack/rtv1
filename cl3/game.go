@@ -44,7 +44,7 @@ func (g *Game) Update() error {
 	}
 
 	// Camera rotation with arrow keys
-	rotationSpeed := 0.03
+	const rotationSpeed = 0.03
 	moved := false
 
 	if ebiten.IsKeyPressed(ebiten.KeyRight) {
