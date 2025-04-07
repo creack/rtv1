@@ -283,8 +283,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 }
 
+//nolint:gochecknglobals // Expected to be global, set in init.
+var isMobile bool
+
 // Layout implements ebiten.Game's interface.
 func (g *Game) Layout(outsideWidth, outsideHeight int) (w, h int) {
+	if isMobile { // When on mobile, restrict the resolution to avoid the browser crashing.
+		outsideWidth = 800
+		outsideHeight = 600
+	}
 	if outsideWidth > 1920 {
 		outsideWidth = 1920
 	}
