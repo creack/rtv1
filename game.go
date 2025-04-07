@@ -9,7 +9,6 @@ import (
 	"math"
 	"os"
 	"runtime"
-	"sync/atomic"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -32,8 +31,8 @@ type Game struct {
 
 	renderedImg image.Image
 
-	width, height uint32
-	forceRedraw   uint32
+	width, height int
+	forceRedraw   bool
 }
 
 func (g *Game) updateCamera() {
@@ -127,7 +126,8 @@ func (g *Game) Update() error {
 	}
 
 	tainted := moved || rotated
-	if atomic.CompareAndSwapUint32(&g.forceRedraw, 1, 0) {
+	if g.forceRedraw {
+		g.forceRedraw = false
 		tainted = true
 	}
 
@@ -135,8 +135,8 @@ func (g *Game) Update() error {
 		op := &ebiten.NewImageOptions{
 			Unmanaged: true, // We handle the image ourselves. Needed to render the image from shader.
 		}
-		width := int(atomic.LoadUint32(&g.width))
-		height := int(atomic.LoadUint32(&g.height))
+		width := g.width
+		height := g.height
 		screen := ebiten.NewImageWithOptions(image.Rect(0, 0, width, height), op)
 
 		g.renderedImg = g.draw(screen)
@@ -285,9 +285,20 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 // Layout implements ebiten.Game's interface.
 func (g *Game) Layout(outsideWidth, outsideHeight int) (w, h int) {
-	atomic.StoreUint32(&g.width, uint32(outsideWidth))
-	atomic.StoreUint32(&g.height, uint32(outsideHeight))
-	atomic.StoreUint32(&g.forceRedraw, 1)
+	if outsideWidth > 1920 {
+		outsideWidth = 1920
+	}
+	if outsideHeight > 1080 {
+		outsideHeight = 1080
+	}
+	if g.width != outsideWidth {
+		g.forceRedraw = true
+		g.width = outsideWidth
+	}
+	if g.height != outsideHeight {
+		g.forceRedraw = true
+		g.height = outsideHeight
+	}
 	return outsideWidth, outsideHeight
 }
 
@@ -296,9 +307,7 @@ func (g *Game) run() {
 	ebiten.SetWindowSize(initialScreenWidth, initialScreenHeight)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
-	if err := ebiten.RunGameWithOptions(g, &ebiten.RunGameOptions{
-		InitUnfocused: true,
-	}); err != nil {
+	if err := ebiten.RunGameWithOptions(g, &ebiten.RunGameOptions{}); err != nil {
 		log.Fatal(err)
 	}
 }
