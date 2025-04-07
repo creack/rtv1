@@ -24,8 +24,11 @@ type Game struct {
 	renderMode RenderMode
 	hideHelp   bool
 
-	cameraOrigin vec3
-	cameraLookAt vec3
+	// Camera vectors passed to the shader via uniforms.
+	cameraOrigin                         vec3
+	cameraForward, cameraRight, cameraUp vec3
+
+	cameraYaw, cameraPitch float // Internal camera angles used to compute the vectors.
 
 	renderedImg image.Image
 
@@ -33,13 +36,25 @@ type Game struct {
 	forceRedraw   uint32
 }
 
+func (g *Game) updateCamera() {
+	g.cameraForward = newVec3(
+		math.Cos(g.cameraYaw)*math.Cos(g.cameraPitch),
+		math.Sin(g.cameraPitch),
+		math.Sin(g.cameraYaw)*math.Cos(g.cameraPitch),
+	)
+	worldUp := newVec3(0, 1, 0)
+	g.cameraRight = normalize3(cross3(worldUp, g.cameraForward))
+	g.cameraUp = normalize3(cross3(g.cameraForward, g.cameraRight))
+}
+
 // Update implements ebiten.Game's interface.
 func (g *Game) Update() error {
-	tainted := true
-
+	// General controls.
 	switch {
+	// Exit with ESC.
 	case inpututil.IsKeyJustPressed(ebiten.KeyEscape):
 		return ebiten.Termination
+	// Toggle GPU/CPU mode, reset the rendered image.
 	case inpututil.IsKeyJustPressed(ebiten.KeySpace):
 		g.renderedImg = nil
 		if g.renderMode == RenderModeGPU {
@@ -50,64 +65,75 @@ func (g *Game) Update() error {
 				g.shader = compileShader()
 			}
 		}
+	// Toggle the help message.
 	case inpututil.IsKeyJustPressed(ebiten.KeyH):
 		g.hideHelp = !g.hideHelp
-
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyW):
-		g.cameraLookAt.y += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyS):
-		g.cameraLookAt.y -= 1.
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyA):
-		g.cameraLookAt.z += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyD):
-		g.cameraLookAt.z -= 1.
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyQ):
-		g.cameraLookAt.x += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyShift) && ebiten.IsKeyPressed(ebiten.KeyE):
-		g.cameraLookAt.x -= 1.
-
-	case ebiten.IsKeyPressed(ebiten.KeyS):
-		g.cameraOrigin.z += 1.
-		g.cameraLookAt.z += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyW):
-		g.cameraOrigin.z -= 1.
-		g.cameraLookAt.z -= 1.
-	case ebiten.IsKeyPressed(ebiten.KeyQ):
-		g.cameraOrigin.y += 1.
-		g.cameraLookAt.y += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyE):
-		g.cameraOrigin.y -= 1.
-		g.cameraLookAt.y -= 1.
-	case ebiten.IsKeyPressed(ebiten.KeyA):
-		g.cameraOrigin.x += 1.
-		g.cameraLookAt.x += 1.
-	case ebiten.IsKeyPressed(ebiten.KeyD):
-		g.cameraOrigin.x -= 1.
-		g.cameraLookAt.x -= 1.
-
-	// case ebiten.IsKeyPressed(ebiten.KeyUp):
-	// 	g.sphereOrigins[0].y += 1.
-	// case ebiten.IsKeyPressed(ebiten.KeyDown):
-	// 	g.sphereOrigins[0].y -= 1.
-	// case ebiten.IsKeyPressed(ebiten.KeyRight):
-	// 	g.sphereOrigins[0].x -= 1.
-	// case ebiten.IsKeyPressed(ebiten.KeyLeft):
-	// 	g.sphereOrigins[0].x += 1.
-	// case ebiten.IsKeyPressed(ebiten.KeyPageUp):
-	// 	g.sphereOrigins[0].z += 1.
-	// case ebiten.IsKeyPressed(ebiten.KeyPageDown):
-	// 	g.sphereOrigins[0].z -= 1.
-
-	default:
-		tainted = false
 	}
+
+	const rotationSpeed = 0.03
+	rotated := false
+	if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		rotated = true
+		g.cameraYaw -= rotationSpeed
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		rotated = true
+		g.cameraYaw += rotationSpeed
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyUp) {
+		rotated = true
+		g.cameraPitch += rotationSpeed
+		if g.cameraPitch > 1.5 { // The a max pitch.
+			g.cameraPitch = 1.5
+		}
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyDown) {
+		rotated = true
+		g.cameraPitch -= rotationSpeed
+		if g.cameraPitch < -1.5 { // Set a min pitch.
+			g.cameraPitch = -1.5
+		}
+	}
+	if rotated {
+		g.updateCamera()
+	}
+
+	const moveSpeed = 0.25
+
+	moved := false
+	if ebiten.IsKeyPressed(ebiten.KeyS) {
+		g.cameraOrigin = sub3(g.cameraOrigin, scale3(g.cameraForward, moveSpeed))
+		moved = true
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyW) {
+		g.cameraOrigin = add3(g.cameraOrigin, scale3(g.cameraForward, moveSpeed))
+		moved = true
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyD) {
+		g.cameraOrigin = add3(g.cameraOrigin, scale3(g.cameraRight, moveSpeed))
+		moved = true
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyA) {
+		g.cameraOrigin = sub3(g.cameraOrigin, scale3(g.cameraRight, moveSpeed))
+		moved = true
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyE) {
+		g.cameraOrigin = add3(g.cameraOrigin, newVec3(0, moveSpeed, 0))
+		moved = true
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyQ) {
+		g.cameraOrigin = sub3(g.cameraOrigin, newVec3(0, moveSpeed, 0))
+		moved = true
+	}
+
+	tainted := moved || rotated
 	if atomic.CompareAndSwapUint32(&g.forceRedraw, 1, 0) {
 		tainted = true
 	}
 
 	if g.renderedImg == nil || tainted {
 		op := &ebiten.NewImageOptions{
-			Unmanaged: true, // We handle the image ourselves.
+			Unmanaged: true, // We handle the image ourselves. Needed to render the image from shader.
 		}
 		width := int(atomic.LoadUint32(&g.width))
 		height := int(atomic.LoadUint32(&g.height))
@@ -124,7 +150,10 @@ func (g *Game) Update() error {
 func (g *Game) drawCPU(screen *ebiten.Image, width, height int) {
 	// Populate Uniform variables.
 	UniCameraOrigin = g.cameraOrigin
-	UniCameraLookAt = g.cameraLookAt
+	UniCameraForward = g.cameraForward
+	UniCameraRight = g.cameraRight
+	UniCameraUp = g.cameraUp
+
 	UniScreenWidth = width
 	UniScreenHeight = height
 
@@ -161,8 +190,11 @@ func (g *Game) drawGPU(screen *ebiten.Image, width, height int) {
 	op.Uniforms = map[string]any{
 		"UniScreenWidth":  width,
 		"UniScreenHeight": height,
-		"UniCameraOrigin": g.cameraOrigin.uniform(),
-		"UniCameraLookAt": g.cameraLookAt.uniform(),
+
+		"UniCameraOrigin":  g.cameraOrigin.uniform(),
+		"UniCameraForward": g.cameraForward.uniform(),
+		"UniCameraRight":   g.cameraRight.uniform(),
+		"UniCameraUp":      g.cameraUp.uniform(),
 	}
 
 	screen.DrawRectShader(width, height, g.shader.data, op)
@@ -215,15 +247,16 @@ func (g *Game) draw(screen *ebiten.Image) image.Image {
 		msg += fmt.Sprintf("png size: %vKB\n", math.Round(float64(buf.Len())/1024.*100.)/100.)
 	}
 	msg += fmt.Sprintf("drawn in: %s\n", duration)
-	msg += fmt.Sprintf("camera origin: %v\n", g.cameraOrigin)
-	msg += fmt.Sprintf("camera lookAt: %v\n", g.cameraLookAt)
+	msg += fmt.Sprintf("camera origin: %s, fwd: %s, right: %s, up: %s\n", g.cameraOrigin, g.cameraForward, g.cameraRight, g.cameraUp)
+	msg += fmt.Sprintf("camera yaw: %0.2f, pitch: %0.2f\n", g.cameraYaw, g.cameraPitch)
+
 	msg += fmt.Sprintf("w/h: %dx%d -- %dx%d -- %dx%d\n", width, height, screen.Bounds().Dx(), screen.Bounds().Dy(), img.Bounds().Dx(), img.Bounds().Dy())
 
 	msg += "\nControls:\n"
-	msg += " - WASDQE: move camera\n"
-	msg += " - Shift WASDQE: change camera direction\n"
-	msg += " - Arrows/PgUp/PgDown: move sphere 1\n"
-	msg += " - Shift Arrows/Shift Pgup/Shift PgDown: move sphere 2\n"
+	msg += " - WASD: move\n"
+	msg += " - QE: up/down\n"
+	msg += " - Arrows: look\n"
+
 	if g.renderMode == 0 {
 		msg += " - Space: Change render mode to CPU\n"
 	} else {

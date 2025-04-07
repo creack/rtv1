@@ -1,6 +1,9 @@
 package main
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 // This file is a wrapper for Kage. It mirror the shaderlib_builtin.kage file to allow
 // for the shader to be compile in Go.
@@ -15,6 +18,10 @@ func (v vec2) uniform() []float32 {
 type vec3 struct {
 	vec2
 	z float
+}
+
+func (v vec3) String() string {
+	return fmt.Sprintf("{%.2g,%.2g,%.2g}", v.x, v.y, v.z)
 }
 
 func (v vec3) uniform() []float32 {
