@@ -3,6 +3,7 @@ package main
 
 import (
 	_ "image/png"
+	"log"
 	"os"
 )
 
@@ -23,9 +24,14 @@ const (
 )
 
 func main() {
+	s, err := loadScene("")
+	if err != nil {
+		log.Fatalf("Failed to load scene scene.json: %s.", err)
+	}
+
 	g := &Game{
-		cameraOrigin: newVec3(9, 4.8, 8.5),
-		//cameraLookAt: newVec3(1.8, 1, 1.2),
+		scene:    s,
+		sceneIdx: 0,
 
 		renderMode: RenderModeGPU,
 	}
@@ -39,7 +45,7 @@ func main() {
 	// If we are in GPU render mode, compile the shader in the background.
 	// Wait a little for the window to be created.
 	if g.renderMode == RenderModeGPU {
-		g.shader = compileShader()
+		g.shader = compileShader(g.scene)
 	}
 
 	g.run()

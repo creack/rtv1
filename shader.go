@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -22,7 +23,7 @@ type shader struct {
 	compileDuration time.Duration
 }
 
-func compileShader() shader {
+func compileShader(s scene) shader {
 	var shaderBufs [][]byte
 
 	// Read the embeded files.
@@ -49,9 +50,15 @@ func compileShader() shader {
 		shaderBufs = append(shaderBufs, buf)
 	}
 
-	s, err, duration := trackTime(func() (*ebiten.Shader, error) {
+	shaderData, err, duration := trackTime(func() (*ebiten.Shader, error) {
 		// Preprocess the Go code into Kage shader code.
-		str := preprocess(shaderBufs...)
+		str := preprocess(s, shaderBufs...)
+		const dumpShader = false
+		if dumpShader {
+			for i, line := range strings.Split(str, "\n") {
+				fmt.Printf("[%d] %s\n", i, line)
+			}
+		}
 		// Compile the shader.
 		return ebiten.NewShader([]byte(str))
 	})
@@ -59,7 +66,7 @@ func compileShader() shader {
 		log.Printf("Error compiling shader: %s.", err)
 	}
 	return shader{
-		data:            s,
+		data:            shaderData,
 		err:             err,
 		compileDuration: duration,
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 )
@@ -20,6 +21,21 @@ type vec3 struct {
 	z float
 }
 
+func (v *vec3) UnmarshalJSON(data []byte) error {
+	var arr [3]float
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	v.x = arr[0]
+	v.y = arr[1]
+	v.z = arr[2]
+	return nil
+}
+
+func (v vec3) marshalConstructor() string {
+	return fmt.Sprintf("newVec3(%f, %f, %f)", v.x, v.y, v.z)
+}
+
 func (v vec3) String() string {
 	return fmt.Sprintf("{%.2g,%.2g,%.2g}", v.x, v.y, v.z)
 }
@@ -32,6 +48,21 @@ func (v vec3) uniform() []float32 {
 type vec4 struct {
 	vec3
 	w float
+}
+
+func (v *vec4) UnmarshalJSON(data []byte) error {
+	var arr [4]float
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	v.x = arr[0]
+	v.y = arr[1]
+	v.z = arr[2]
+	v.w = arr[3]
+	return nil
+}
+func (v vec4) marshalConstructor() string {
+	return fmt.Sprintf("newVec4(%f, %f, %f, %f)", v.x, v.y, v.z, v.w)
 }
 
 func (v vec4) uniform() []float32 {

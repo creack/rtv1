@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func preprocess(files ...[]byte) string {
+func preprocess(s scene, files ...[]byte) string {
 	// Remove the "package main" line from the secondary files.
 	str := string(files[0])
 	for _, elem := range files[1:] {
@@ -15,14 +15,20 @@ func preprocess(files ...[]byte) string {
 		str += stripped
 	}
 
+	// Inject the scene objects.
+	str = strings.ReplaceAll(str, "//scene:things", s.marshalInjectThings())
+
+	// Inject the scene lights
+	str = strings.ReplaceAll(str, "//scene:lights", s.marshalInjectLights())
+
 	// Replace the custom types with their underlying equivalents.
 	for _, elem := range []struct {
 		CustomType string
 		ItemType   string
 		ArraySize  int
 	}{
-		{"ThingsT", "mat4", len(ThingsT{})},
-		{"LightsT", "mat4", len(LightsT{})},
+		{"ThingsT", "mat4", len(s.Objects)},
+		{"LightsT", "mat4", len(s.Lights)},
 	} {
 		underlying := elem.ItemType
 		if elem.ArraySize > 0 {

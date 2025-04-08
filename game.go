@@ -23,8 +23,8 @@ type Game struct {
 	renderMode RenderMode
 	hideHelp   bool
 
-	// Camera vectors passed to the shader via uniforms.
-	cameraOrigin, cameraLookAt vec3
+	scene    scene
+	sceneIdx int
 
 	renderedImg image.Image
 
@@ -47,12 +47,33 @@ func (g *Game) Update() error {
 		} else {
 			g.renderMode = RenderModeGPU
 			if g.shader.data == nil {
-				g.shader = compileShader()
+				g.shader = compileShader(g.scene)
 			}
 		}
 	// Toggle the help message.
 	case inpututil.IsKeyJustPressed(ebiten.KeyH):
 		g.hideHelp = !g.hideHelp
+	// Cycle through the scenes.
+	case inpututil.IsKeyJustPressed(ebiten.KeyC):
+		scenes, err := sceneFiles.ReadDir("scenes")
+		if err != nil {
+			return fmt.Errorf("failed to read scenes dir: %w", err)
+		}
+		g.sceneIdx++
+
+		if g.sceneIdx >= len(scenes) {
+			g.sceneIdx = 0
+		}
+
+		g.scene, err = loadScene(scenes[g.sceneIdx].Name())
+		if err != nil {
+			return fmt.Errorf("failed to load scene %s: %w", scenes[g.sceneIdx].Name(), err)
+		}
+		if g.renderMode == RenderModeGPU {
+			g.shader = compileShader(g.scene)
+		}
+
+		g.renderedImg = nil
 	}
 
 	const rotationSpeed = 0.3
@@ -60,27 +81,27 @@ func (g *Game) Update() error {
 	if ebiten.IsKeyPressed(ebiten.KeyRight) {
 		rotated = true
 
-		_, right, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
-		g.cameraLookAt = add3(g.cameraLookAt, scale3(right, rotationSpeed))
+		_, right, _ := getCameraComponents(newCameraComponents(g.scene.Camera.Origin, g.scene.Camera.LookAt))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(right, rotationSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
 		rotated = true
 
-		_, right, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
-		g.cameraLookAt = add3(g.cameraLookAt, scale3(right, -rotationSpeed))
+		_, right, _ := getCameraComponents(newCameraComponents(g.scene.Camera.Origin, g.scene.Camera.LookAt))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(right, -rotationSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyUp) {
 		rotated = true
 
-		if calculatePitch(g.cameraOrigin, g.cameraLookAt) < 1.2 {
-			g.cameraLookAt = add3(g.cameraLookAt, newVec3(0, rotationSpeed, 0))
+		if calculatePitch(g.scene.Camera.Origin, g.scene.Camera.LookAt) < 1.2 {
+			g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, newVec3(0, rotationSpeed, 0))
 		}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyDown) {
 		rotated = true
 
-		if calculatePitch(g.cameraOrigin, g.cameraLookAt) > -1.2 {
-			g.cameraLookAt = add3(g.cameraLookAt, newVec3(0, -rotationSpeed, 0))
+		if calculatePitch(g.scene.Camera.Origin, g.scene.Camera.LookAt) > -1.2 {
+			g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, newVec3(0, -rotationSpeed, 0))
 		}
 	}
 
@@ -89,37 +110,37 @@ func (g *Game) Update() error {
 	moved := false
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
 		moved = true
-		forward, _, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
-		g.cameraOrigin = add3(g.cameraOrigin, scale3(forward, moveSpeed))
-		g.cameraLookAt = add3(g.cameraLookAt, scale3(forward, moveSpeed))
+		forward, _, _ := getCameraComponents(newCameraComponents(g.scene.Camera.Origin, g.scene.Camera.LookAt))
+		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, scale3(forward, moveSpeed))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(forward, moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyS) {
 		moved = true
-		forward, _, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
-		g.cameraOrigin = add3(g.cameraOrigin, scale3(forward, -moveSpeed))
-		g.cameraLookAt = add3(g.cameraLookAt, scale3(forward, -moveSpeed))
+		forward, _, _ := getCameraComponents(newCameraComponents(g.scene.Camera.Origin, g.scene.Camera.LookAt))
+		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, scale3(forward, -moveSpeed))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(forward, -moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyD) {
 		moved = true
-		_, right, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
-		g.cameraOrigin = add3(g.cameraOrigin, scale3(right, moveSpeed))
-		g.cameraLookAt = add3(g.cameraLookAt, scale3(right, moveSpeed))
+		_, right, _ := getCameraComponents(newCameraComponents(g.scene.Camera.Origin, g.scene.Camera.LookAt))
+		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, scale3(right, moveSpeed))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(right, moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyA) {
 		moved = true
-		_, right, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
-		g.cameraOrigin = add3(g.cameraOrigin, scale3(right, -moveSpeed))
-		g.cameraLookAt = add3(g.cameraLookAt, scale3(right, -moveSpeed))
+		_, right, _ := getCameraComponents(newCameraComponents(g.scene.Camera.Origin, g.scene.Camera.LookAt))
+		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, scale3(right, -moveSpeed))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(right, -moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyE) {
 		moved = true
-		g.cameraOrigin = add3(g.cameraOrigin, newVec3(0, moveSpeed, 0))
-		g.cameraLookAt = add3(g.cameraLookAt, newVec3(0, moveSpeed, 0))
+		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, newVec3(0, moveSpeed, 0))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, newVec3(0, moveSpeed, 0))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyQ) {
 		moved = true
-		g.cameraOrigin = add3(g.cameraOrigin, newVec3(0, -moveSpeed, 0))
-		g.cameraLookAt = add3(g.cameraLookAt, newVec3(0, -moveSpeed, 0))
+		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, newVec3(0, -moveSpeed, 0))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, newVec3(0, -moveSpeed, 0))
 	}
 
 	tainted := moved || rotated
@@ -146,8 +167,8 @@ func (g *Game) Update() error {
 // Used to debug/troubleshoot and verify the shader logic.
 func (g *Game) drawCPU(screen *ebiten.Image, width, height int) {
 	// Populate Uniform variables.
-	UniCameraOrigin = g.cameraOrigin
-	UniCameraLookAt = g.cameraLookAt
+	UniCameraOrigin = g.scene.Camera.Origin
+	UniCameraLookAt = g.scene.Camera.LookAt
 
 	UniScreenWidth = width
 	UniScreenHeight = height
@@ -186,8 +207,8 @@ func (g *Game) drawGPU(screen *ebiten.Image, width, height int) {
 		"UniScreenWidth":  width,
 		"UniScreenHeight": height,
 
-		"UniCameraOrigin": g.cameraOrigin.uniform(),
-		"UniCameraLookAt": g.cameraLookAt.uniform(),
+		"UniCameraOrigin": g.scene.Camera.Origin.uniform(),
+		"UniCameraLookAt": g.scene.Camera.LookAt.uniform(),
 	}
 
 	screen.DrawRectShader(width, height, g.shader.data, op)
@@ -232,18 +253,20 @@ func (g *Game) draw(screen *ebiten.Image) image.Image {
 	}
 
 	msg := "\n\n\n"
-	msg += fmt.Sprintf("shader enabled: %t\n", g.renderMode == RenderModeGPU)
+	msg += fmt.Sprintf("shader enabled: %t", g.renderMode == RenderModeGPU)
 	if g.renderMode == 0 && g.shader.compileDuration > 0 {
-		msg += fmt.Sprintf("shader compile time: %s\n", g.shader.compileDuration)
+		msg += fmt.Sprintf(", shader compile time: %s\n", g.shader.compileDuration)
+	} else {
+		msg += "\n"
 	}
+
 	if dumpPNG {
 		msg += fmt.Sprintf("png size: %vKB\n", math.Round(float64(buf.Len())/1024.*100.)/100.)
 	}
 	msg += fmt.Sprintf("drawn in: %s\n", duration)
-	msg += fmt.Sprintf("camera origin: %s, lookAt: %s\n", g.cameraOrigin, g.cameraLookAt)
-	msg += fmt.Sprintf("camera pitch: %0.2f\n", calculatePitch(g.cameraOrigin, g.cameraLookAt))
+	msg += fmt.Sprintf("camera origin: %s, lookAt: %s, pitch: %0.2f\n", g.scene.Camera.Origin, g.scene.Camera.LookAt, calculatePitch(g.scene.Camera.Origin, g.scene.Camera.LookAt))
 
-	msg += fmt.Sprintf("w/h: %dx%d -- %dx%d -- %dx%d\n", width, height, screen.Bounds().Dx(), screen.Bounds().Dy(), img.Bounds().Dx(), img.Bounds().Dy())
+	msg += fmt.Sprintf("w/h: %dx%d\n", width, height)
 
 	msg += "\nControls:\n"
 	msg += " - WASD: move\n"
@@ -256,6 +279,9 @@ func (g *Game) draw(screen *ebiten.Image) image.Image {
 		msg += " - Space: Change render mode to GPU (shader)\n"
 	}
 	msg += " - H: Hide this help\n"
+	msg += " - C: Change scene\n"
+	msg += "\n"
+	msg += fmt.Sprintf("Current scene: %s\n", g.scene.name)
 	if !g.hideHelp {
 		ebitenutil.DebugPrint(img, msg)
 	}
