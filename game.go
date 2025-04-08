@@ -24,26 +24,12 @@ type Game struct {
 	hideHelp   bool
 
 	// Camera vectors passed to the shader via uniforms.
-	cameraOrigin                         vec3
-	cameraForward, cameraRight, cameraUp vec3
-
-	cameraYaw, cameraPitch float // Internal camera angles used to compute the vectors.
+	cameraOrigin, cameraLookAt vec3
 
 	renderedImg image.Image
 
 	width, height int
 	forceRedraw   bool
-}
-
-func (g *Game) updateCamera() {
-	g.cameraForward = newVec3(
-		math.Cos(g.cameraYaw)*math.Cos(g.cameraPitch),
-		math.Sin(g.cameraPitch),
-		math.Sin(g.cameraYaw)*math.Cos(g.cameraPitch),
-	)
-	worldUp := newVec3(0, 1, 0)
-	g.cameraRight = normalize3(cross3(worldUp, g.cameraForward))
-	g.cameraUp = normalize3(cross3(g.cameraForward, g.cameraRight))
 }
 
 // Update implements ebiten.Game's interface.
@@ -69,60 +55,71 @@ func (g *Game) Update() error {
 		g.hideHelp = !g.hideHelp
 	}
 
-	const rotationSpeed = 0.03
+	const rotationSpeed = 0.3
 	rotated := false
 	if ebiten.IsKeyPressed(ebiten.KeyRight) {
 		rotated = true
-		g.cameraYaw -= rotationSpeed
+
+		_, right, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
+		g.cameraLookAt = add3(g.cameraLookAt, scale3(right, rotationSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
 		rotated = true
-		g.cameraYaw += rotationSpeed
+
+		_, right, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
+		g.cameraLookAt = add3(g.cameraLookAt, scale3(right, -rotationSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyUp) {
 		rotated = true
-		g.cameraPitch += rotationSpeed
-		if g.cameraPitch > 1.5 { // The a max pitch.
-			g.cameraPitch = 1.5
+
+		if calculatePitch(g.cameraOrigin, g.cameraLookAt) < 1.2 {
+			g.cameraLookAt = add3(g.cameraLookAt, newVec3(0, rotationSpeed, 0))
 		}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyDown) {
 		rotated = true
-		g.cameraPitch -= rotationSpeed
-		if g.cameraPitch < -1.5 { // Set a min pitch.
-			g.cameraPitch = -1.5
+
+		if calculatePitch(g.cameraOrigin, g.cameraLookAt) > -1.2 {
+			g.cameraLookAt = add3(g.cameraLookAt, newVec3(0, -rotationSpeed, 0))
 		}
-	}
-	if rotated {
-		g.updateCamera()
 	}
 
 	const moveSpeed = 0.25
 
 	moved := false
-	if ebiten.IsKeyPressed(ebiten.KeyS) {
-		g.cameraOrigin = sub3(g.cameraOrigin, scale3(g.cameraForward, moveSpeed))
-		moved = true
-	}
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
-		g.cameraOrigin = add3(g.cameraOrigin, scale3(g.cameraForward, moveSpeed))
 		moved = true
+		forward, _, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
+		g.cameraOrigin = add3(g.cameraOrigin, scale3(forward, moveSpeed))
+		g.cameraLookAt = add3(g.cameraLookAt, scale3(forward, moveSpeed))
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyS) {
+		moved = true
+		forward, _, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
+		g.cameraOrigin = add3(g.cameraOrigin, scale3(forward, -moveSpeed))
+		g.cameraLookAt = add3(g.cameraLookAt, scale3(forward, -moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyD) {
-		g.cameraOrigin = add3(g.cameraOrigin, scale3(g.cameraRight, moveSpeed))
 		moved = true
+		_, right, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
+		g.cameraOrigin = add3(g.cameraOrigin, scale3(right, moveSpeed))
+		g.cameraLookAt = add3(g.cameraLookAt, scale3(right, moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyA) {
-		g.cameraOrigin = sub3(g.cameraOrigin, scale3(g.cameraRight, moveSpeed))
 		moved = true
+		_, right, _ := getCameraComponents(newCameraComponents(g.cameraOrigin, g.cameraLookAt))
+		g.cameraOrigin = add3(g.cameraOrigin, scale3(right, -moveSpeed))
+		g.cameraLookAt = add3(g.cameraLookAt, scale3(right, -moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyE) {
-		g.cameraOrigin = add3(g.cameraOrigin, newVec3(0, moveSpeed, 0))
 		moved = true
+		g.cameraOrigin = add3(g.cameraOrigin, newVec3(0, moveSpeed, 0))
+		g.cameraLookAt = add3(g.cameraLookAt, newVec3(0, moveSpeed, 0))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyQ) {
-		g.cameraOrigin = sub3(g.cameraOrigin, newVec3(0, moveSpeed, 0))
 		moved = true
+		g.cameraOrigin = add3(g.cameraOrigin, newVec3(0, -moveSpeed, 0))
+		g.cameraLookAt = add3(g.cameraLookAt, newVec3(0, -moveSpeed, 0))
 	}
 
 	tainted := moved || rotated
@@ -150,9 +147,7 @@ func (g *Game) Update() error {
 func (g *Game) drawCPU(screen *ebiten.Image, width, height int) {
 	// Populate Uniform variables.
 	UniCameraOrigin = g.cameraOrigin
-	UniCameraForward = g.cameraForward
-	UniCameraRight = g.cameraRight
-	UniCameraUp = g.cameraUp
+	UniCameraLookAt = g.cameraLookAt
 
 	UniScreenWidth = width
 	UniScreenHeight = height
@@ -191,10 +186,8 @@ func (g *Game) drawGPU(screen *ebiten.Image, width, height int) {
 		"UniScreenWidth":  width,
 		"UniScreenHeight": height,
 
-		"UniCameraOrigin":  g.cameraOrigin.uniform(),
-		"UniCameraForward": g.cameraForward.uniform(),
-		"UniCameraRight":   g.cameraRight.uniform(),
-		"UniCameraUp":      g.cameraUp.uniform(),
+		"UniCameraOrigin": g.cameraOrigin.uniform(),
+		"UniCameraLookAt": g.cameraLookAt.uniform(),
 	}
 
 	screen.DrawRectShader(width, height, g.shader.data, op)
@@ -247,8 +240,8 @@ func (g *Game) draw(screen *ebiten.Image) image.Image {
 		msg += fmt.Sprintf("png size: %vKB\n", math.Round(float64(buf.Len())/1024.*100.)/100.)
 	}
 	msg += fmt.Sprintf("drawn in: %s\n", duration)
-	msg += fmt.Sprintf("camera origin: %s, fwd: %s, right: %s, up: %s\n", g.cameraOrigin, g.cameraForward, g.cameraRight, g.cameraUp)
-	msg += fmt.Sprintf("camera yaw: %0.2f, pitch: %0.2f\n", g.cameraYaw, g.cameraPitch)
+	msg += fmt.Sprintf("camera origin: %s, lookAt: %s\n", g.cameraOrigin, g.cameraLookAt)
+	msg += fmt.Sprintf("camera pitch: %0.2f\n", calculatePitch(g.cameraOrigin, g.cameraLookAt))
 
 	msg += fmt.Sprintf("w/h: %dx%d -- %dx%d -- %dx%d\n", width, height, screen.Bounds().Dx(), screen.Bounds().Dy(), img.Bounds().Dx(), img.Bounds().Dy())
 

@@ -4,15 +4,13 @@ package main
 // It compiles to both Go and Kage shader (after pre-processing).
 
 //rec:func:trace
-func trace(camera mat4, rayDir vec3, lights LightsT, things ThingsT, depth int) vec4 {
-	rayStart, _, _, _ := getCamera(camera) //nolint:dogsled // Expected.
-
-	closestThing, dist := intersection(rayStart, rayDir, things)
+func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, depth int) vec4 {
+	closestThing, dist := intersection(cameraOrigin, rayDir, things)
 	if dist == 0 {
 		return newVec4(0, 0, 0, 1)
 	}
 	//rec:call:shade
-	return shade(rayStart, rayDir, closestThing, dist, lights, things, depth)
+	return shade(cameraOrigin, rayDir, closestThing, dist, lights, things, depth)
 }
 
 //rec:endfunc:trace
@@ -64,9 +62,6 @@ func getReflectionColor(thing mat4, pos, rd vec3, lights LightsT, things ThingsT
 	// In shader mode, to avoid recursion, we exclude this block from the final depth.
 	//rec:if:depth
 	if depth+1 < maxDepth {
-		var camera mat4
-		camera[0] = newVec4(pos.x, pos.y, pos.z, 0)
-
 		var reflected float
 		if getThingType(thing) == 1 {
 			reflected = reflectSphere(thing, pos)
@@ -75,7 +70,7 @@ func getReflectionColor(thing mat4, pos, rd vec3, lights LightsT, things ThingsT
 		}
 		return scale4(
 			//rec:rec-call:trace
-			trace(camera, rd, lights, things, depth+1),
+			trace(pos, rd, lights, things, depth+1),
 			reflected,
 		)
 	}

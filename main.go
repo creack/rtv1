@@ -9,9 +9,9 @@ import (
 const (
 	initialScreenWidth  = 800
 	initialScreenHeight = 600
-
-	dumpPNG = false
 )
+
+const dumpPNG = false // For debug/testing purposes.
 
 // RenderMode enum type.
 type RenderMode int
@@ -24,15 +24,11 @@ const (
 
 func main() {
 	g := &Game{
-		cameraOrigin:  newVec3(11, 1.9, 4.3),
-		cameraForward: newVec3(-0.94, -0.1, -0.33),
-		cameraRight:   newVec3(-0.33, 0, 0.94),
-		cameraUp:      newVec3(-0.1, 1, 0),
-		cameraYaw:     -2.8,
-		cameraPitch:   -0.1,
-		renderMode:    RenderModeGPU,
+		cameraOrigin: newVec3(9, 4.8, 8.5),
+		//cameraLookAt: newVec3(1.8, 1, 1.2),
+
+		renderMode: RenderModeGPU,
 	}
-	g.updateCamera()
 
 	// TODO: Document the fake shader aspect.
 	// WHen the fake shader mode is enabled, set the render to be CPU.

@@ -17,6 +17,6 @@ func getLight(in mat4) (center vec3, color vec4) {
 	return in[0].xyz, in[2]
 }
 
-func getCamera(in mat4) (center, forward, right, up vec3) {
-	return in[0].xyz, in[1].xyz, in[2].xyz, in[3].xyz
+func getCameraComponents(in mat4) (forward, right, up vec3) {
+	return in[0].xyz, in[1].xyz, in[2].xyz
 }

@@ -26,11 +26,11 @@ func testRay(rayStart, rayDir vec3, things ThingsT) float {
 	return -1
 }
 
-func initRay(width, height, x, y int, camera mat4) vec3 {
+func initRay(width, height, x, y int, cameraComponents mat4) vec3 {
 	recenterX := (float(x) - float(width)/2.0) / 2.0 / float(width)
 	recenterY := -(float(y) - float(height)/2.0) / 2.0 / float(height)
 
-	_, forward, right, up := getCamera(camera)
+	forward, right, up := getCameraComponents(cameraComponents)
 
 	return normalize3(add3(forward, add3(scale3(right, recenterX), scale3(up, recenterY))))
 }
