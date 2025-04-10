@@ -13,6 +13,7 @@ func getThingDiffuse(thing mat4, recPoint vec3, materials MaterialsT) vec4 {
 	}
 }
 
+//rec:func:trace
 func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, materials MaterialsT, ambientLightColor vec4, depth int, x, y int) vec4 {
 	result := newVec4(0.1, 0.1, 0.1, 1) // Background color.
 	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
@@ -21,24 +22,24 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 		return result
 	}
 
-	var recNormal vec3
+	var hitNormal vec3
 
-	recPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
 	if t := getThingType(closestThing); t == SphereType {
-		result = diffuseSphere(closestThing, recPoint, materials)
+		result = diffuseSphere(closestThing, hitPoint, materials)
 		center, radius, _ := getSphere(closestThing)
-		recNormal = scale3(sub3(recPoint, center), 1/radius)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
 	} else if t == PlaneType {
-		result = diffusePlane(closestThing, recPoint, materials)
-		recNormal = normalPlane(closestThing, recPoint)
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
 	} else {
 		return newVec4(1, 1, 0, 1) // Error color.
 	}
 
-	_, materialAmbient, materialDiffuse, materialSpecular, materialSpecularPower, _ := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
 
 	// Initialize the result with the ambient light color.
-	result = mul4(scale4(result, materialAmbient), ambientLightColor)
+	result = mul4(scale4(result, matAmbient), ambientLightColor)
 
 	for i := 0; i < len(lights); i++ {
 		light := lights[i]
@@ -47,12 +48,12 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 		lightOrigin, lightColor, lightIntensity := getLight(light)
 
 		// Calculate the light direction and distance.
-		lightDir := sub3(lightOrigin, recPoint)
+		lightDir := sub3(lightOrigin, hitPoint)
 		lightDistance := length3(lightDir)
 		lightDir = normalize3(lightDir)
 
 		// Re-cast from the hit point to the light source.
-		_, dist := intersection(recPoint, lightDir, things, 0.001, lightDistance)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
 		if dist != 0 { // If we hit something, we don't see the light, so move forward.
 			continue
 		}
@@ -60,14 +61,14 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 		// If we didn't hit anything, it means we have the light source in sight.
 
 		// Diffuse lighting.
-		diffFactor := max(0, dot3(recNormal, lightDir))
-		diffuse := scale4(getThingDiffuse(closestThing, recPoint, materials), materialDiffuse*diffFactor)
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
 
 		// Specular lighting.
 		viewDir := normalize3(scale3(rayDir, -1))
-		reflectDir := reflect3(scale3(lightDir, -1), recNormal)
-		specFactor := pow(max(0, dot3(viewDir, reflectDir)), materialSpecularPower)
-		specular := scale4(lightColor, materialSpecular*specFactor)
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
 
 		// Combine diffuse and specular components.
 		combined := add4(diffuse, specular)
@@ -82,5 +83,17 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 		result = add4(result, combined)
 	}
 
+	_ = matReflectiveIndex
+	//rec:if:depth
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		//rec:rec-call:trace
+		reflectColor := trace(hitPoint, reflectDir, lights, things, materials, ambientLightColor, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	//rec:endif:depth
+
 	return result
 }
+
+//rec:endfunc:trace

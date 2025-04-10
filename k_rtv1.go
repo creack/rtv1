@@ -22,7 +22,7 @@ func getMaterialColor(materials MaterialsT, idx int) vec4 {
 	return color
 }
 
-const maxDepth = 15
+const maxDepth = 3
 
 const (
 	SphereType = 1
@@ -52,7 +52,7 @@ func Fragment(position vec4, _ vec2, _ vec4) vec4 {
 
 	rayDir := initRay(width, height, x, y, cameraComponents)
 
-	out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, sceneMaterials, ambientLightColor, 0, x, y)
+	out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, sceneMaterials, ambientLightColor, maxDepth, x, y)
 
 	return out
 }

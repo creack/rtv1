@@ -73,7 +73,6 @@ func (s Scene) TraceRay(ray Ray, depth int, x, y int) Color {
 
 		result = result.Add(combined)
 	}
-	return result
 
 	// Calculate reflection
 	if rec.Material.ReflectiveIndex > 0 && depth > 0 {

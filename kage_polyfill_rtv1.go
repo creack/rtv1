@@ -31,6 +31,20 @@ type sphere struct {
 	Material string `json:"material"`
 }
 
+func (s *sphere) UnmarshalJSON(data []byte) error {
+	type alias sphere
+	if err := json.Unmarshal(data, (*alias)(s)); err != nil {
+		return err
+	}
+	if s.Radius <= 0 {
+		return fmt.Errorf("radius must be greater than 0")
+	}
+	if s.Center.vec2 == nil {
+		return fmt.Errorf("missing 'center'")
+	}
+	return nil
+}
+
 func (s sphere) mat4() mat4 { return newSphere(s.Center, s.Radius, materialTypeIndex[s.Material]) }
 
 func (s sphere) marshalConstructor() string {
@@ -43,6 +57,23 @@ type plane struct {
 	IsCheckerboard bool   `json:"is_checkerboard"`
 	CheckerSize    float  `json:"checker_size"`
 	Material       string `json:"material"`
+}
+
+func (p *plane) UnmarshalJSON(data []byte) error {
+	type alias plane
+	if err := json.Unmarshal(data, (*alias)(p)); err != nil {
+		return err
+	}
+	if p.IsCheckerboard && p.CheckerSize <= 0 {
+		return fmt.Errorf("checker size must be greater than 0")
+	}
+	if p.Center.vec2 == nil {
+		return fmt.Errorf("missing 'center'")
+	}
+	if p.Normal.vec2 == nil {
+		return fmt.Errorf("missing 'normal'")
+	}
+	return nil
 }
 
 func (p plane) mat4() mat4 {

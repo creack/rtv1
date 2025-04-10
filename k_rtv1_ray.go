@@ -29,17 +29,9 @@ func intersection(rayStart, rayDir vec3, things ThingsT, minDist, maxDist float)
 	return closestThing, closest
 }
 
-// func testRay(rayStart, rayDir vec3, things ThingsT) float {
-// 	_, dist := intersection(rayStart, rayDir, things)
-// 	if dist != 0 {
-// 		return dist
-// 	}
-// 	return -1
-// }
-
 func initRay(width, height, x, y int, cameraComponents mat4) vec3 {
 	// Hard-coded FOV for now.
-	FOV := 45.0
+	const FOV = 45.0
 
 	// Calculcate the viewplane.
 	aspectRatio := float(width) / float(height)
@@ -47,10 +39,11 @@ func initRay(width, height, x, y int, cameraComponents mat4) vec3 {
 	halfHeight := tan(theta / 2.0)
 	halfWidth := aspectRatio * halfHeight
 
+	// Get the camera vectors.
 	forward, right, up := getCameraComponents(cameraComponents)
 
-	u := float(x) / float(width-1)
-	v := 1.0 - float(y)/float(height-1)
+	u := float(x) / float(width)
+	v := 1.0 - float(y)/float(height)
 
 	dir := scale3(right, u*2.0*halfWidth-halfWidth)
 	dir = add3(dir, scale3(up, v*2.0*halfHeight-halfHeight))
