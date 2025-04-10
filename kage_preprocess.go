@@ -23,6 +23,7 @@ func preprocess(s scene, files ...[]byte) string {
 		{"things", s.marshalInjectThings},
 		{"lights", s.marshalInjectLights},
 		{"materials", s.marshalInjectMaterials},
+		{"ambientLightColor", func() string { return `ambientLightColor := ` + s.AmbientLight.Color.marshalConstructor() }},
 	} {
 		str = strings.ReplaceAll(str, "//scene:"+elem.k, elem.f())
 	}

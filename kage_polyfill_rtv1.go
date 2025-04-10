@@ -17,10 +17,12 @@ type MaterialsT []mat4
 
 // Globals used to pass the scene to the Fragment function.
 // In shader mode, it the constructors get injected.
+// Not using Uniform as it doesn't support complex types nor arrays.
 var (
-	sceneObjects   ThingsT
-	sceneLights    LightsT
-	sceneMaterials MaterialsT
+	sceneObjects      ThingsT
+	sceneLights       LightsT
+	sceneMaterials    MaterialsT
+	ambientLightColor vec4
 )
 
 type sphere struct {

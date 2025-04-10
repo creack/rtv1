@@ -31,6 +31,9 @@
       "material": "white"
     }
   ],
+  "ambient_light": {
+    "color": [0.85, 0.1, 0.05]
+  },
   "lights": [
     {
       "origin": [-2, 2, 0],

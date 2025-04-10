@@ -26,7 +26,7 @@ func (s Scene) TraceRay(ray Ray, depth int, x, y int) Color {
 	}
 
 	// Initialize with ambient light
-	result := rec.Material.Color.Mul(rec.Material.Ambient) //.MulColor(s.AmbientLight)
+	result := rec.Material.Color.Mul(rec.Material.Ambient).MulColor(s.AmbientLight)
 	//result := rec.Material.Color
 
 	// Process each light
@@ -128,7 +128,7 @@ func CreateScene(screenWidth, screenHeight int) Scene {
 				Normal:         Vector3{0, 1, 0},
 				Material:       materials["white"],
 				IsCheckerboard: true,
-				CheckerSize:    0.5, // Size of each checker square
+				CheckerSize:    0.1, // Size of each checker square
 			},
 		},
 	}
@@ -145,7 +145,7 @@ func CreateScene(screenWidth, screenHeight int) Scene {
 		World:        world,
 		Lights:       lights,
 		Camera:       camera,
-		AmbientLight: Color{0.05, 0.05, 0.05}, // Reduced ambient light
-		MaxDepth:     3,                       // Reduced for interactive performance
+		AmbientLight: Color{0.85, 0.1, 0.05}, // Reduced ambient light
+		MaxDepth:     3,                      // Reduced for interactive performance
 	}
 }

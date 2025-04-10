@@ -16,6 +16,7 @@ func getThingMaterialIdx(thing mat4) int {
 	return int(thing[0].y)
 }
 
+// getMaterialColor returns the color of the material.
 func getMaterialColor(materials MaterialsT, idx int) vec4 {
 	color, _, _, _, _, _ := getMaterial(materials, idx)
 	return color
@@ -45,12 +46,13 @@ func Fragment(position vec4, _ vec2, _ vec4) vec4 {
 	//scene:things
 	//scene:lights
 	//scene:materials
+	//scene:ambientLightColor
 
 	cameraComponents := newCameraComponents(cameraOrigin, cameraLookAt)
 
 	rayDir := initRay(width, height, x, y, cameraComponents)
 
-	out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, sceneMaterials, 0, x, y)
+	out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, sceneMaterials, ambientLightColor, 0, x, y)
 
 	return out
 }

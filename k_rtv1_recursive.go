@@ -13,7 +13,7 @@ func getThingDiffuse(thing mat4, recPoint vec3, materials MaterialsT) vec4 {
 	}
 }
 
-func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, materials MaterialsT, depth int, x, y int) vec4 {
+func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, materials MaterialsT, ambientLightColor vec4, depth int, x, y int) vec4 {
 	result := newVec4(0.1, 0.1, 0.1, 1) // Background color.
 	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
 
@@ -36,14 +36,17 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 	}
 
 	_, materialAmbient, materialDiffuse, materialSpecular, materialSpecularPower, _ := getMaterial(materials, getThingMaterialIdx(closestThing))
-	ambientLight := newVec4(0.05, 0.05, 0.05, 1) // TODO: Use the scene ambient light.
-	result = mul4(scale4(result, materialAmbient), ambientLight)
+
+	// Initialize the result with the ambient light color.
+	result = mul4(scale4(result, materialAmbient), ambientLightColor)
 
 	for i := 0; i < len(lights); i++ {
 		light := lights[i]
 
+		// Get the light fields from the object.
 		lightOrigin, lightColor, lightIntensity := getLight(light)
 
+		// Calculate the light direction and distance.
 		lightDir := sub3(lightOrigin, recPoint)
 		lightDistance := length3(lightDir)
 		lightDir = normalize3(lightDir)
@@ -56,26 +59,26 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 
 		// If we didn't hit anything, it means we have the light source in sight.
 
+		// Diffuse lighting.
 		diffFactor := max(0, dot3(recNormal, lightDir))
 		diffuse := scale4(getThingDiffuse(closestThing, recPoint, materials), materialDiffuse*diffFactor)
 
+		// Specular lighting.
 		viewDir := normalize3(scale3(rayDir, -1))
 		reflectDir := reflect3(scale3(lightDir, -1), recNormal)
-
-		const materalRedSpecular = 0.5
-		const materalRedSpecularPower = 32
-
-		//log.Println(materialSpecularPower, materalRedSpecularPower)
-		//materialSpecularPower = materalRedSpecularPower
 		specFactor := pow(max(0, dot3(viewDir, reflectDir)), materialSpecularPower)
 		specular := scale4(lightColor, materialSpecular*specFactor)
-		_ = specular
 
+		// Combine diffuse and specular components.
 		combined := add4(diffuse, specular)
+
+		// Apply the light color and intensity.
 		combined = scale4(mul4(combined, lightColor), lightIntensity)
 
+		// Apply distance attenuation (inverse square law).
 		attenuation := 1.0 / (lightDistance * lightDistance)
 		combined = scale4(combined, attenuation)
+
 		result = add4(result, combined)
 	}
 

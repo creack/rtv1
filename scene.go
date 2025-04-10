@@ -54,11 +54,12 @@ func (objs *objects) UnmarshalJSON(data []byte) error {
 }
 
 type scene struct {
-	name      string
-	Camera    camera     `json:"camera"`
-	Objects   objects    `json:"objects"`
-	Lights    []light    `json:"lights"`
-	Materials []material `json:"materials"`
+	name         string
+	Camera       camera     `json:"camera"`
+	Objects      objects    `json:"objects"`
+	AmbientLight light      `json:"ambient_light"`
+	Lights       []light    `json:"lights"`
+	Materials    []material `json:"materials"`
 }
 
 func loadScene(fileName string) (scene, error) {
@@ -102,6 +103,7 @@ func loadScene(fileName string) (scene, error) {
 	for _, elem := range s.Materials {
 		sceneMaterials = append(sceneMaterials, elem.mat4())
 	}
+	ambientLightColor = s.AmbientLight.Color
 
 	return s, nil
 }
