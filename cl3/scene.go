@@ -93,20 +93,20 @@ func CreateScene(screenWidth, screenHeight int) Scene {
 	// Create world with objects
 	world := HittableList{
 		Objects: []Hittable{
-			// // Cylinder on the left - rotated 45 degrees around X axis
-			// Cylinder{
-			// 	Center1:  Vector3{-0.5, -0.5, -0.7},
-			// 	Center2:  Vector3{-0.5, 0.1, -0.3}, // Rotated 45 degrees manually
-			// 	Radius:   0.15,
-			// 	Material: materials["yellow"],
-			// },
-			// // Cone on the right, with top matching cylinder's top
-			// Cone{
-			// 	Apex:     Vector3{0.5, 0.5, -0.7},
-			// 	Base:     Vector3{0.5, -0.5, -0.7},
-			// 	Radius:   0.15,
-			// 	Material: materials["orange"],
-			// },
+			// Cylinder on the left - rotated 45 degrees around X axis
+			Cylinder{
+				Center1:  Vector3{-0.5, -0.5, -0.7},
+				Center2:  Vector3{-0.5, 0.1, -0.3}, // Rotated 45 degrees manually
+				Radius:   0.15,
+				Material: materials["yellow"],
+			},
+			// Cone on the right, with top matching cylinder's top
+			Cone{
+				Apex:     Vector3{0.5, 0.5, -0.7},
+				Base:     Vector3{0.5, -0.5, -0.7},
+				Radius:   0.15,
+				Material: materials["orange"],
+			},
 			Sphere{
 				Center:   Vector3{0, 0, -1},
 				Radius:   0.5,

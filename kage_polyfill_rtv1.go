@@ -90,6 +90,74 @@ func (p plane) marshalConstructor() string {
 	)
 }
 
+type cylinder struct {
+	Center1  vec3   `json:"center1"`
+	Center2  vec3   `json:"center2"`
+	Radius   float  `json:"radius"`
+	Material string `json:"material"`
+}
+
+func (c *cylinder) UnmarshalJSON(data []byte) error {
+	type alias cylinder
+	if err := json.Unmarshal(data, (*alias)(c)); err != nil {
+		return err
+	}
+	if c.Radius <= 0 {
+		return fmt.Errorf("radius must be greater than 0")
+	}
+	if c.Center1 == (vec3{}) || c.Center2 == (vec3{}) {
+		return fmt.Errorf("missing 'center1' or 'center2'")
+	}
+	return nil
+}
+
+func (c cylinder) mat4() mat4 {
+	return newCylinder(c.Center1, c.Center2, c.Radius, materialTypeIndex[c.Material])
+}
+
+func (c cylinder) marshalConstructor() string {
+	return fmt.Sprintf("newCylinder(%s, %s, %f, %d)",
+		c.Center1.marshalConstructor(),
+		c.Center2.marshalConstructor(),
+		c.Radius,
+		materialTypeIndex[c.Material],
+	)
+}
+
+type cone struct {
+	Apex     vec3   `json:"apex"`
+	Base     vec3   `json:"base"`
+	Radius   float  `json:"radius"`
+	Material string `json:"material"`
+}
+
+func (c *cone) UnmarshalJSON(data []byte) error {
+	type alias cone
+	if err := json.Unmarshal(data, (*alias)(c)); err != nil {
+		return err
+	}
+	if c.Radius <= 0 {
+		return fmt.Errorf("radius must be greater than 0")
+	}
+	if c.Apex == (vec3{}) || c.Base == (vec3{}) {
+		return fmt.Errorf("missing 'apex' or 'base'")
+	}
+	return nil
+}
+
+func (c cone) mat4() mat4 {
+	return newCone(c.Apex, c.Base, c.Radius, materialTypeIndex[c.Material])
+}
+
+func (c cone) marshalConstructor() string {
+	return fmt.Sprintf("newCone(%s, %s, %f, %d)",
+		c.Apex.marshalConstructor(),
+		c.Base.marshalConstructor(),
+		c.Radius,
+		materialTypeIndex[c.Material],
+	)
+}
+
 type light struct {
 	Origin    vec3  `json:"origin"`
 	Color     vec4  `json:"color"`

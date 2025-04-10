@@ -8,9 +8,14 @@ func getThingDiffuse(thing mat4, recPoint vec3, materials MaterialsT) vec4 {
 		return diffuseSphere(thing, recPoint, materials)
 	} else if t == PlaneType {
 		return diffusePlane(thing, recPoint, materials)
-	} else {
-		return newVec4(1, 0, 1, 1) // Error color.
+	} else if t == ConeType {
+		return diffuseCone(thing, recPoint, materials)
+	} else if t == CylinderType {
+		return newVec4(0, 1, 0, 1) // TODO: Implement diffuseCylinder
+		// return diffuseCylinder(thing, recPoint, materials)
 	}
+
+	return newVec4(1, 0, 1, 1) // Error color.
 }
 
 //rec:func:trace
@@ -32,6 +37,11 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 	} else if t == PlaneType {
 		result = diffusePlane(closestThing, hitPoint, materials)
 		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		return newVec4(0, 1, 0, 1) // TODO.
 	} else {
 		return newVec4(1, 1, 0, 1) // Error color.
 	}

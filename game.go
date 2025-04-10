@@ -18,6 +18,8 @@ import (
 // This file holds the Ebiten specific code.
 // Game implements ebiten.Game's interface.
 type Game struct {
+	time int
+
 	shader shader
 
 	renderMode RenderMode
@@ -34,6 +36,9 @@ type Game struct {
 
 // Update implements ebiten.Game's interface.
 func (g *Game) Update() error {
+	g.time++
+	g.renderedImg = nil
+
 	// General controls.
 	switch {
 	// Exit with ESC.
@@ -170,8 +175,10 @@ func (g *Game) drawCPU(screen *ebiten.Image, width, height int) {
 	UniCameraOrigin = g.scene.Camera.Origin
 	UniCameraLookAt = g.scene.Camera.LookAt
 
-	UniScreenWidth = width
-	UniScreenHeight = height
+	cx, cy := ebiten.CursorPosition()
+	Cursor = vec2{float(cx), float(cy)}
+	Resolution = vec2{float(width), float(height)}
+	Time = float(g.time) / 60.0
 
 	// Render.
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -203,9 +210,12 @@ func (g *Game) drawGPU(screen *ebiten.Image, width, height int) {
 	}
 	op := &ebiten.DrawRectShaderOptions{}
 
+	cx, cy := ebiten.CursorPosition()
+
 	op.Uniforms = map[string]any{
-		"UniScreenWidth":  width,
-		"UniScreenHeight": height,
+		"Time":       float(g.time) / 60.0,
+		"Resolution": [2]float{float(width), float(height)},
+		"Cursor":     [2]float{float(cx), float(cy)},
 
 		"UniCameraOrigin": g.scene.Camera.Origin.uniform(),
 		"UniCameraLookAt": g.scene.Camera.LookAt.uniform(),

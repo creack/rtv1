@@ -18,6 +18,12 @@ var factory = map[string]func() any{
 	"sphere": func() any {
 		return &sphere{}
 	},
+	"cylinder": func() any {
+		return &cylinder{}
+	},
+	"cone": func() any {
+		return &cone{}
+	},
 }
 
 func (objs *objects) UnmarshalJSON(data []byte) error {

@@ -25,9 +25,10 @@ func getMaterialColor(materials MaterialsT, idx int) vec4 {
 const maxDepth = 3
 
 const (
-	SphereType = 1
-	PlaneType  = 2
-	LightType  = 3
+	SphereType   = 1
+	PlaneType    = 2
+	ConeType     = 3
+	CylinderType = 4
 )
 
 // Fragment is the shader's entry point.
@@ -35,8 +36,10 @@ const (
 //nolint:revive // Unexported return is required by the shader API.
 func Fragment(position vec4, _ vec2, _ vec4) vec4 {
 	// "Localize" the uniform globals.
-	width, height := UniScreenWidth, UniScreenHeight
+	width, height := int(Resolution.x), int(Resolution.y)
+
 	cameraOrigin, cameraLookAt := UniCameraOrigin, UniCameraLookAt
+	cameraOrigin = newVec3(5*cos(0.5*Time), 0, 5*sin(0.5*Time))
 
 	x := int(position.x)
 	y := int(position.y)
