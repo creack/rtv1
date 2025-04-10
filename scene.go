@@ -109,7 +109,7 @@ func loadScene(fileName string) (scene, error) {
 	for _, elem := range s.Materials {
 		sceneMaterials = append(sceneMaterials, elem.mat4())
 	}
-	ambientLightColor = s.AmbientLight.Color
+	ambientLight = s.AmbientLight.mat4()
 
 	return s, nil
 }

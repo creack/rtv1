@@ -19,7 +19,7 @@ func getThingDiffuse(thing mat4, recPoint vec3, materials MaterialsT) vec4 {
 }
 
 //rec:func:trace
-func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, materials MaterialsT, ambientLightColor vec4, depth int, x, y int) vec4 {
+func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, materials MaterialsT, ambientLight mat4, depth int, x, y int) vec4 {
 	result := newVec4(0.1, 0.1, 0.1, 1) // Background color.
 	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
 
@@ -48,8 +48,9 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 
 	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
 
-	// Initialize the result with the ambient light color.
-	result = mul4(scale4(result, matAmbient), ambientLightColor)
+	// Initialize the result with the ambient light.
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
 
 	for i := 0; i < len(lights); i++ {
 		light := lights[i]
@@ -98,7 +99,7 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 	if matReflectiveIndex > 0 && depth > 0 {
 		reflectDir := reflect3(rayDir, hitNormal)
 		//rec:rec-call:trace
-		reflectColor := trace(hitPoint, reflectDir, lights, things, materials, ambientLightColor, depth-1, x, y)
+		reflectColor := trace(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
 		result = add4(result, scale4(reflectColor, matReflectiveIndex))
 	}
 	//rec:endif:depth

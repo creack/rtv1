@@ -23,7 +23,7 @@ func preprocess(s scene, files ...[]byte) string {
 		{"things", s.marshalInjectThings},
 		{"lights", s.marshalInjectLights},
 		{"materials", s.marshalInjectMaterials},
-		{"ambientLightColor", func() string { return `ambientLightColor := ` + s.AmbientLight.Color.marshalConstructor() }},
+		{"ambientLight", func() string { return `ambientLight := ` + s.AmbientLight.marshalConstructor() }},
 	} {
 		str = strings.ReplaceAll(str, "//scene:"+elem.k, elem.f())
 	}
@@ -38,10 +38,7 @@ func preprocess(s scene, files ...[]byte) string {
 		{"LightsT", "mat4", len(s.Lights)},
 		{"MaterialsT", "mat4", len(s.Materials)},
 	} {
-		underlying := elem.ItemType
-		if elem.ArraySize > 0 {
-			underlying = fmt.Sprintf("[%d]"+elem.ItemType, elem.ArraySize)
-		}
+		underlying := fmt.Sprintf("[%d]"+elem.ItemType, elem.ArraySize)
 		str = strings.ReplaceAll(str, elem.CustomType, underlying)
 	}
 

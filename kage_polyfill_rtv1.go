@@ -19,10 +19,10 @@ type MaterialsT []mat4
 // In shader mode, it the constructors get injected.
 // Not using Uniform as it doesn't support complex types nor arrays.
 var (
-	sceneObjects      ThingsT
-	sceneLights       LightsT
-	sceneMaterials    MaterialsT
-	ambientLightColor vec4
+	sceneObjects   ThingsT
+	sceneLights    LightsT
+	sceneMaterials MaterialsT
+	ambientLight   mat4
 )
 
 type sphere struct {

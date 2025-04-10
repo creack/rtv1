@@ -49,13 +49,13 @@ func Fragment(position vec4, _ vec2, _ vec4) vec4 {
 	//scene:things
 	//scene:lights
 	//scene:materials
-	//scene:ambientLightColor
+	//scene:ambientLight
 
 	cameraComponents := newCameraComponents(cameraOrigin, cameraLookAt)
 
 	rayDir := initRay(width, height, x, y, cameraComponents)
 
-	out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, sceneMaterials, ambientLightColor, maxDepth, x, y)
+	out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, sceneMaterials, ambientLight, maxDepth, x, y)
 
 	return out
 }
