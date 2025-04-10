@@ -12,6 +12,10 @@ func newLight(center vec3, color vec4, intensity float) mat4 {
 	)
 }
 
+func getLight(in mat4) (center vec3, color vec4, intensity float) {
+	return in[0].xyz, in[2], in[0].w
+}
+
 //var first int
 
 // func addLight(thing mat4, pos, norm, rd vec3, col vec4, light mat4, things ThingsT) vec4 {

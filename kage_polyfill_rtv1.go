@@ -35,11 +35,6 @@ func (s sphere) marshalConstructor() string {
 	return fmt.Sprintf("newSphere(%s, %f, %d)", s.Center.marshalConstructor(), s.Radius, materialTypeIndex[s.Material])
 }
 
-//nolint:unparam // Keeping for reference.
-func getSphere(in mat4) (center vec3, radius, radius2 float) {
-	return in[1].vec3, in[0].z, in[0].w
-}
-
 type plane struct {
 	Center         vec3   `json:"center"`
 	Normal         vec3   `json:"normal"`
@@ -62,10 +57,6 @@ func (p plane) marshalConstructor() string {
 	)
 }
 
-func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float) {
-	return in[1].vec3, in[2].vec3, in[0].z != 0.0, in[0].w
-}
-
 type light struct {
 	Origin    vec3  `json:"origin"`
 	Color     vec4  `json:"color"`
@@ -76,10 +67,6 @@ func (l light) mat4() mat4 { return newLight(l.Origin, l.Color, l.Intensity) }
 
 func (l light) marshalConstructor() string {
 	return fmt.Sprintf("newLight(%s, %s, %f)", l.Origin.marshalConstructor(), l.Color.marshalConstructor(), l.Intensity)
-}
-
-func getLight(in mat4) (center vec3, color vec4, intensity float) {
-	return in[0].vec3, in[2], in[0].w
 }
 
 // NOTE: Only populated/accessed at the start during the scene loading phase.
@@ -125,22 +112,7 @@ func (m material) marshalConstructor() string {
 	)
 }
 
-func getMaterial(materials MaterialsT, idx int) (color vec4, ambient, diffuse, specular, specularPower, reflectiveIndex float) {
-	m := materials[idx]
-	color = m[1]
-	ambient = m[0].y
-	diffuse = m[0].z
-	specular = m[0].w
-	specularPower = m[1].x
-	reflectiveIndex = m[1].y
-	return color, ambient, diffuse, specular, specularPower, reflectiveIndex
-}
-
 type camera struct {
 	Origin vec3 `json:"origin"`
 	LookAt vec3 `json:"lookAt"`
-}
-
-func getCameraComponents(in mat4) (forward, right, up vec3) {
-	return in[0].vec3, in[1].vec3, in[2].vec3
 }

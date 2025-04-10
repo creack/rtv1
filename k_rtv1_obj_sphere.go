@@ -14,6 +14,10 @@ func newSphere(center vec3, radius float, materialIdx int) mat4 {
 	)
 }
 
+func getSphere(in mat4) (center vec3, radius, radius2 float) {
+	return in[1].xyz, in[0].z, in[0].w
+}
+
 func diffuseSphere(thing mat4, pos vec3, materials MaterialsT) vec4 {
 	_ = pos
 	return getMaterialColor(materials, getThingMaterialIdx(thing))

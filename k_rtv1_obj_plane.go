@@ -19,6 +19,10 @@ func newPlane(center, normal vec3, isCheckerBoard bool, checkerSize float, mater
 	)
 }
 
+func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float) {
+	return in[1].xyz, in[2].xyz, in[0].z != 0.0, in[0].w
+}
+
 func diffusePlane(thing mat4, pos vec3, materials MaterialsT) vec4 {
 	_, _, isCheckerboard, checkerSize := getPlane(thing) //nolint:dogsled // Expected.
 	color := getMaterialColor(materials, getThingMaterialIdx(thing))

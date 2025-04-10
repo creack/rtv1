@@ -28,11 +28,11 @@ func add3(v1, v2 vec3) vec3 {
 }
 
 func add4(v1, v2 vec4) vec4 {
-  return newVec4(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z, 1)
+  return v1 + v2
 }
 
 func mul4(v1, v2 vec4) vec4 {
-  return newVec4(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z, 1)
+  return v1 * v2
 }
 
 func scale3(v1 vec3, f float) vec3 {
@@ -40,7 +40,7 @@ func scale3(v1 vec3, f float) vec3 {
 }
 
 func scale4(v1 vec4, f float) vec4 {
-  return newVec4(v1.x * f, v1.y * f, v1.z * f, 1)
+  return v1 * f
 }
 
 func normalize3(v vec3) vec3 {

@@ -17,8 +17,9 @@ func (v vec2) uniform() []float32 {
 }
 
 type vec3 struct {
-	vec2
-	z float
+	*vec2
+	xy vec2
+	z  float
 }
 
 func (v *vec3) UnmarshalJSON(data []byte) error {
@@ -26,9 +27,7 @@ func (v *vec3) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &arr); err != nil {
 		return err
 	}
-	v.x = arr[0]
-	v.y = arr[1]
-	v.z = arr[2]
+	*v = newVec3(arr[0], arr[1], arr[2])
 	return nil
 }
 
@@ -46,8 +45,13 @@ func (v vec3) uniform() []float32 {
 }
 
 type vec4 struct {
-	vec3
-	w float
+	*vec3
+	xyz vec3
+	w   float
+}
+
+func (v vec4) String() string {
+	return fmt.Sprintf("{%.2g,%.2g,%.2g,%.2g}", v.x, v.y, v.z, v.w)
 }
 
 func (v *vec4) UnmarshalJSON(data []byte) error {
@@ -55,10 +59,7 @@ func (v *vec4) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &arr); err != nil {
 		return err
 	}
-	v.x = arr[0]
-	v.y = arr[1]
-	v.z = arr[2]
-	v.w = arr[3]
+	*v = newVec4(arr[0], arr[1], arr[2], arr[3])
 	return nil
 }
 func (v vec4) marshalConstructor() string {
@@ -129,17 +130,17 @@ var (
 
 func newVec3(x, y, z float) vec3 {
 	var v vec3
-	v.x = x
-	v.y = y
+	v.xy.x = x
+	v.xy.y = y
+	v.vec2 = &v.xy
 	v.z = z
 	return v
 }
 
 func newVec4(x, y, z, w float) vec4 {
 	var v vec4
-	v.x = x
-	v.y = y
-	v.z = z
+	v.xyz = newVec3(x, y, z)
+	v.vec3 = &v.xyz
 	v.w = w
 	return v
 }

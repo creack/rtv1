@@ -21,6 +21,10 @@ func newCameraComponents(camStart, camLookAt vec3) mat4 {
 	)
 }
 
+func getCameraComponents(in mat4) (forward, right, up vec3) {
+	return in[0].xyz, in[1].xyz, in[2].xyz
+}
+
 // calculatePitch is a helper function to calculate the pitch angle
 // of the camera.
 // Only used in the ebiten update move logic to restrict
