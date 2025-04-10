@@ -4,7 +4,7 @@ import "math"
 
 // Camera represents a simple camera
 type Camera struct {
-	Position    Vector3
+	Origin      Vector3
 	LookAt      Vector3
 	Up          Vector3
 	FOV         float64
@@ -13,9 +13,9 @@ type Camera struct {
 
 // GetRay returns a ray from the camera to the given screen coordinates (u,v)
 func (c Camera) GetRay(u, v float64) Ray {
-	w := c.Position.Sub(c.LookAt).Normalize()
-	u_vec := c.Up.Cross(w).Normalize()
-	v_vec := w.Cross(u_vec)
+	forward := c.Origin.Sub(c.LookAt).Normalize()
+	right := c.Up.Cross(forward).Normalize()
+	up := forward.Cross(right)
 
 	// Calculate viewplane
 	theta := c.FOV * math.Pi / 180.0
@@ -23,12 +23,12 @@ func (c Camera) GetRay(u, v float64) Ray {
 	half_width := c.AspectRatio * half_height
 
 	// Calculate ray direction
-	direction := u_vec.Mul(u*2.0*half_width - half_width)
-	direction = direction.Add(v_vec.Mul(v*2.0*half_height - half_height))
-	direction = direction.Sub(w)
+	direction := right.Mul(u*2.0*half_width - half_width)
+	direction = direction.Add(up.Mul(v*2.0*half_height - half_height))
+	direction = direction.Sub(forward)
 	direction = direction.Normalize()
 
-	return Ray{c.Position, direction}
+	return Ray{c.Origin, direction}
 }
 
 // Default camera vectors
@@ -67,7 +67,7 @@ func CreateCamera(screenWidth, screenHeight int) Camera {
 
 	// Create camera
 	return Camera{
-		Position:    CameraPosition,
+		Origin:      CameraPosition,
 		LookAt:      CameraPosition.Add(CameraForward),
 		Up:          CameraUp,
 		FOV:         45.0,

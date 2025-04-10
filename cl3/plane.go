@@ -23,11 +23,12 @@ func (p Plane) Hit(ray Ray, tMin, tMax float64) (bool, HitRecord) {
 		return false, HitRecord{}
 	}
 
-	hitPoint := ray.PointAt(t)
+	//hitPoint := ray.PointAt(t)
+	hitPoint := ray.Origin.Add(ray.Direction.Mul(t))
 	material := p.Material
 
 	// Apply checkerboard pattern if enabled
-	if p.IsCheckerboard {
+	if false && p.IsCheckerboard {
 		// Calculate checkerboard pattern based on x and z coordinates
 		x := math.Floor(hitPoint.X / p.CheckerSize)
 		z := math.Floor(hitPoint.Z / p.CheckerSize)

@@ -1,7 +1,7 @@
 {
   "camera": {
     "origin": [9, 4.8, 8.5],
-    "lookAt": [0.1, 0, 0]
+    "lookAt": [0, 0, 0]
   },
   "objects": [
     {

@@ -1,55 +1,56 @@
 package main
 
-// center: p[0].xyz
-// offset: p[0].w
-// roughness: p[1].x
-// color: p[2]
-// specular: p[3]
-func newPlane(center vec3, offset float, col vec4) mat4 {
+// type: p[0].x - plane
+// materialIdx: p[0].y
+// isCheckerBoard: p[0].z
+// checkerSize: p[0].w
+// center: p[1].xyz
+// normal: p[2].xyz
+func newPlane(center, normal vec3, isCheckerBoard bool, checkerSize float, materialIdx int) mat4 {
+	isCheckerBoardFloat := 0.0
+	if isCheckerBoard {
+		isCheckerBoardFloat = 1.0
+	}
 	return newMat4(
-		newVec4(center.x, center.y, center.z, offset),
-		newVec4(150, 0, PlaneType, 0),
-		col,
-		newVec4(1, 1, 1, 1),
+		newVec4(PlaneType, float(materialIdx), isCheckerBoardFloat, checkerSize),
+		newVec4(center.x, center.y, center.z, isCheckerBoardFloat),
+		newVec4(normal.x, normal.y, normal.z, checkerSize),
+		newVec4(0, 0, 0, 0),
 	)
 }
 
-func reflectPlane(thing mat4, pos vec3) float {
-	_ = thing
-	if (int(floor(pos.z))+int(floor(pos.x)))%2 != 0 {
-		return 0.1
+func diffusePlane(thing mat4, pos vec3, materials MaterialsT) vec4 {
+	_, _, isCheckerboard, checkerSize, materialIdx := getPlane(thing) //nolint:dogsled // Expected.
+	_, color, _, _, _, _, _ := getMaterial(materials, materialIdx)
+	if !isCheckerboard {
+		return color
 	}
-	return 0.7
-}
 
-func diffusePlane(thing mat4, pos vec3) vec4 {
-	if (int(floor(pos.z))+int(floor(pos.x)))%2 != 0 {
-		return thing[2]
+	if (int(floor(pos.z/checkerSize))+int(floor(pos.x/checkerSize)))%2 != 0 {
+		return newVec4(0.1, 0.1, 0.1, 1)
 	}
-	return newVec4(0, 0, 0, 0)
+	return color
 }
 
-func specularPlane(thing mat4, pos vec3) vec4 {
+func normalPlane(thing mat4, pos vec3) vec3 {
 	_ = pos
-	return thing[3]
+	_, pNorm, _, _, _ := getPlane(thing) //nolint:dogsled // Expected.
+	//log.Println(pNorm)
+	return pNorm
 }
 
-func roughnessPlane(thing mat4, pos vec3) float {
-	_ = pos
-	return thing[1].x
-}
+func hitPlane(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
+	pPos, pNorm, _, _, _ := getPlane(thing) //nolint:dogsled // Expected.
 
-func normalPlane(rayStart, center vec3) vec3 {
-	_ = rayStart
-	return center
-}
-
-func hitPlane(rayStart, rayDir vec3, thing mat4) float {
-	ppos, _, _, _ := getSphere(thing) //nolint:dogsled // Expected.
-	denom := dot3(ppos, rayDir)
-	if denom > 0 {
+	denom := dot3(rayDir, pNorm)
+	if abs(denom) < 1e-6 {
 		return 0
 	}
-	dist := (dot3(ppos, rayStart) + thing[0].w) / (-denom)
+
+	dist := dot3(sub3(pPos, rayStart), pNorm) / denom
+	if dist < minDist || (maxDist != -1 && dist > maxDist) {
+		return 0
+	}
+
 	return dist
 }

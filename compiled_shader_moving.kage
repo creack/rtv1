@@ -1,0 +1,406 @@
+package main
+
+//kage:unit pixels
+
+
+func getThingType(thing mat4) float {
+        return thing[1].z
+}
+
+const maxDepth = 15
+
+const (
+        SphereType = 1
+        PlaneType  = 2
+        LightType  = 3
+)
+
+
+func newCameraComponents(camStart, camLookAt vec3) mat4 {
+        worldUp := newVec3(0, 1, 0)
+
+        forward := normalize3(sub3(camStart, camLookAt))
+        right := normalize3(cross3(worldUp, forward))
+        up := cross3(forward, right)
+
+        return newMat4(
+                newVec4(forward.x, forward.y, forward.z, 0),
+                newVec4(right.x, right.y, right.z, 0),
+                newVec4(up.x, up.y, up.z, 0),
+                newVec4(0, 0, 0, 0),
+        )
+}
+
+
+var Time float
+var Resolution vec2
+
+func Fragment(position vec4, _ vec2, _ vec4) vec4 {
+        // "Localize" the uniform globals.
+        width, height := int(Resolution.x), int(Resolution.y)
+        cameraOrigin, cameraLookAt := newVec3(cos(Time), 0.25 * sin(4 * Time) - 0.25, 5-sin(Time)), newVec3(0, 0, 0)
+
+        x := int(position.x)
+        y := int(position.y)
+
+        // Inject the scene constructors for the shader mode.
+        // In Go mode, we use the global variables.
+        sceneObjects := [4]mat4{
+                newSphere(newVec3(0.000000, 0.000000, -1.000000), 0.500000, newVec4(1.000000, 0.200000, 0.200000, 1.000000)),
+                newSphere(newVec3(-1.000000, -0.250000, -1.500000), 0.500000, newVec4(0.200000, 0.200000, 1.000000, 1.000000)),
+                newSphere(newVec3(1.000000, 0.500000, -1.500000), 0.500000, newVec4(0.200000, 1.000000, 0.200000, 1.000000)),
+                newPlane(newVec3(0.000000, -0.500000, 0.000000), newVec3(0.000000, 1.000000, 0.000000), true, 0.100000, newVec4(0.800000, 0.800000, 0.800000, 0.000000)),
+        }
+
+        sceneLights := [3]mat4{
+                newLight(newVec3(-2.000000, 2.000000, 0.000000), newVec4(1.000000, 1.000000, 1.000000, 0.000000), 5.000000),
+                newLight(newVec3(2.000000, 1.000000, 0.000000), newVec4(0.800000, 0.800000, 1.000000, 0.000000), 3.000000),
+                newLight(newVec3(0.000000, 0.000000, 1.500000), newVec4(1.000000, 1.000000, 0.900000, 0.000000), 2.000000),
+        }
+
+
+        cameraComponents := newCameraComponents(cameraOrigin, cameraLookAt)
+
+        rayDir := initRay(width, height, x, y, cameraComponents)
+
+        out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, 0, x, y)
+
+        return out
+}
+
+
+// p[0].xyz = center
+// p[0].w = intensity
+// p[1].xyzw = color
+func newLight(center vec3, color vec4, intensity float) mat4 {
+        return newMat4(
+                newVec4(center.x, center.y, center.z, intensity),
+                newVec4(0, 0, LightType, 0),
+                color,
+                newVec4(0, 0, 0, 0),
+        )
+}
+
+// center: p[0].xyz
+// normal: p[1].xyz
+// isCheckerBoard: p[0].w
+// checkerSize: p[1].w
+// color: p[2]
+// specular: p[3]
+func newPlane(center, normal vec3, isCheckerBoard bool, checkerSize float, col vec4) mat4 {
+        isCheckerBoardFloat := 0.0
+        if isCheckerBoard {
+                isCheckerBoardFloat = 1.0
+        }
+        return newMat4(
+                newVec4(center.x, center.y, center.z, isCheckerBoardFloat),
+                newVec4(0, 0, PlaneType, checkerSize),
+                col,
+                newVec4(normal.x, normal.y, normal.z, checkerSize),
+        )
+}
+
+func diffusePlane(thing mat4, pos vec3) vec4 {
+        _, _, isCheckerboard, checkerSize, col := getPlane(thing) //nolint:dogsled // Expected.
+        if !isCheckerboard {
+                return col
+        }
+
+        if (int(floor(pos.z/checkerSize))+int(floor(pos.x/checkerSize)))%2 != 0 {
+                return newVec4(0.1, 0.1, 0.1, 1)
+        }
+        return col
+}
+
+func normalPlane(thing mat4, pos vec3) vec3 {
+        _ = pos
+        _, pNorm, _, _, _ := getPlane(thing) //nolint:dogsled // Expected.
+        return pNorm
+}
+
+func hitPlane(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
+        pPos, pNorm, _, _, _ := getPlane(thing) //nolint:dogsled // Expected.
+
+        denom := dot3(rayDir, pNorm)
+        if abs(denom) < 1e-6 {
+                return 0
+        }
+
+        dist := dot3(sub3(pPos, rayStart), pNorm) / denom
+        if dist < minDist || (maxDist != -1 && dist > maxDist) {
+                return 0
+        }
+
+        return dist
+}
+
+
+// center: s[0].xyz
+// radius: s[0].w
+// radius2: s[1].w
+// roughness: s[1].x
+// color: s[2]
+// specular: s[3]
+func newSphere(center vec3, radius float, col vec4) mat4 {
+        return newMat4(
+                newVec4(center.x, center.y, center.z, radius),
+                newVec4(250., 0, SphereType, radius*radius),
+                col,
+                newVec4(0.3, 0.3, 0.3, 1),
+        )
+}
+
+func diffuseSphere(thing mat4, pos vec3) vec4 {
+        _ = pos
+        _, _, _, col := getSphere(thing) //nolint:dogsled // Expected.
+        return col
+}
+
+func normalSphere(rayStart, center vec3) vec3 {
+        return normalize3(sub3(rayStart, center))
+}
+
+func hitSphere(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
+        sphereCenter, _, sphereRadius2, _ := getSphere(thing)
+
+        oc := sub3(rayStart, sphereCenter)
+        a := dot3(rayDir, rayDir)
+        b := 2.0 * dot3(oc, rayDir)
+        c := dot3(oc, oc) - sphereRadius2
+        discriminant := b*b - 4*a*c
+
+        if discriminant < 0 {
+                return 0
+        }
+
+        sqrtd := sqrt(discriminant)
+        root := (-b - sqrtd) / (2 * a)
+        if root < minDist || (maxDist != -1 && root > maxDist) {
+                root = (-b + sqrtd) / (2 * a)
+                if root < minDist || (maxDist != -1 && root > maxDist) {
+                        return 0
+                }
+        }
+
+        return root
+}
+
+func intersect(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
+        if t := getThingType(thing); t == SphereType {
+                return hitSphere(rayStart, rayDir, thing, minDist, maxDist)
+        } else if t == PlaneType {
+                return hitPlane(rayStart, rayDir, thing, minDist, maxDist)
+        }
+        return -1.
+}
+
+func intersection(rayStart, rayDir vec3, things [4]mat4, minDist, maxDist float) (closestThing mat4, closest float) {
+        closest = maxDist
+        hitSomething := false
+        for i := 0; i < len(things); i++ {
+                dist := intersect(rayStart, rayDir, things[i], minDist, closest)
+                hit := dist != 0
+                if hit {
+                        hitSomething = true
+                        closest = dist
+                        closestThing = things[i]
+                }
+
+        }
+        if !hitSomething {
+                closest = 0.
+        }
+
+        return closestThing, closest
+}
+
+func initRay(width, height, x, y int, cameraComponents mat4) vec3 {
+        // Hard-coded FOV for now.
+        FOV := 45.0
+
+        // Calculcate the viewplane.
+        aspectRatio := float(width) / float(height)
+        theta := FOV * pi / 180.0
+        halfHeight := tan(theta / 2.0)
+        halfWidth := aspectRatio * halfHeight
+
+        forward, right, up := getCameraComponents(cameraComponents)
+
+        u := float(x) / float(width-1)
+        v := 1.0 - float(y)/float(height-1)
+
+        dir := scale3(right, u*2.0*halfWidth-halfWidth)
+        dir = add3(dir, scale3(up, v*2.0*halfHeight-halfHeight))
+        dir = sub3(dir, forward)
+        dir = normalize3(dir)
+
+        return dir // Return the calculated direction vector
+}
+
+
+// This file contains the recursive functions used for the raytracer.
+// It compiles to both Go and Kage shader (after pre-processing).
+
+func getThingDiffuse(thing mat4, recPoint vec3) vec4 {
+        if t := getThingType(thing); t == SphereType {
+                return diffuseSphere(thing, recPoint)
+        } else if t == PlaneType {
+                return diffusePlane(thing, recPoint)
+        } else {
+                return newVec4(1, 0, 1, 1) // Error color.
+        }
+}
+
+func trace(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [4]mat4, depth int, x, y int) vec4 {
+        result := newVec4(0.1, 0.1, 0.1, 1) // Background color.
+        closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+
+        if dist == 0 {
+                return result
+        }
+
+        var recNormal vec3
+
+        recPoint := add3(cameraOrigin, scale3(rayDir, dist))
+        if t := getThingType(closestThing); t == SphereType {
+                result = diffuseSphere(closestThing, recPoint)
+                center, radius, _, _ := getSphere(closestThing)
+                recNormal = scale3(sub3(recPoint, center), 1/radius)
+        } else if t == PlaneType {
+                result = diffusePlane(closestThing, recPoint)
+                recNormal = normalPlane(closestThing, recPoint)
+        } else {
+                return newVec4(1, 1, 0, 1) // Error color.
+        }
+
+        const materialRedAmbient = 0.1
+        ambientLight := newVec4(0.05, 0.05, 0.05, 1)
+        result = mul4(scale4(result, materialRedAmbient), ambientLight)
+
+        //nolint:modernize // Kage doesn't support range.
+        for i := 0; i < len(lights); i++ {
+                light := lights[i]
+                lightOrigin, lightColor, lightIntensity := getLight(light)
+
+                _ = lightOrigin
+                _ = lightColor
+                _ = lightIntensity
+
+                lightDir := sub3(lightOrigin, recPoint)
+                lightDistance := length3(lightDir)
+                lightDir = normalize3(lightDir)
+                _ = lightDistance
+
+                // Re-cast from the hit point to the light source.
+                _, dist := intersection(recPoint, lightDir, things, 0.001, lightDistance)
+                if dist != 0 { // If we hit something, we don't see the light, so move forward.
+                        continue
+                }
+
+                // If we didn't hit anything, it means we have the light source in sight.
+
+                const materialRedDiffuse = 0.7
+                diffFactor := max(0, dot3(recNormal, lightDir))
+                diffuse := scale4(getThingDiffuse(closestThing, recPoint), materialRedDiffuse*diffFactor)
+
+
+                _ = diffFactor
+                _ = diffuse
+
+                viewDir := normalize3(scale3(rayDir, -1))
+                reflectDir := reflect3(scale3(lightDir, -1), recNormal)
+                const materalRedSpecular = 0.5
+                const materalRedSpecularPower = 32
+                specFactor := pow(max(0, dot3(viewDir, reflectDir)), materalRedSpecularPower)
+                specular := scale4(lightColor, materalRedSpecular*specFactor)
+                _ = specular
+
+                combined := add4(diffuse, specular)
+                combined = scale4(mul4(combined, lightColor), lightIntensity)
+
+                attenuation := 1.0 / (lightDistance * lightDistance)
+                combined = scale4(combined, attenuation)
+                result = add4(result, combined)
+        }
+
+        return result
+}
+
+var UniScreenWidth, UniScreenHeight int
+
+var UniCameraOrigin, UniCameraLookAt vec3
+
+
+const pi = 3.14159265358979323846264338327950288419716939937510582097494459 // https://oeis.org/A000796
+
+func newVec3(x, y, z float) vec3 {
+        return vec3(x, y, z)
+}
+
+func newVec4(x, y, z, w float) vec4 {
+        return vec4(x, y, z, w)
+}
+
+func newMat4(a, b, c, d vec4) mat4 {
+        return mat4(a, b, c, d)
+}
+
+func sub3(v1, v2 vec3) vec3 {
+  return v1 - v2
+}
+
+func add3(v1, v2 vec3) vec3 {
+  return v1 + v2
+}
+
+func add4(v1, v2 vec4) vec4 {
+  return newVec4(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z, 1)
+}
+
+func mul4(v1, v2 vec4) vec4 {
+  return newVec4(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z, 1)
+}
+
+func scale3(v1 vec3, f float) vec3 {
+  return v1 * f
+}
+
+func scale4(v1 vec4, f float) vec4 {
+  return newVec4(v1.x * f, v1.y * f, v1.z * f, 1)
+}
+
+func normalize3(v vec3) vec3 {
+        return normalize(v)
+}
+
+func cross3(v1, v2 vec3) vec3 {
+  return cross(v1, v2)
+}
+
+func length3(v vec3) float {
+  return length(v)
+}
+
+func dot3(v1, v2 vec3) float {
+  return dot(v1, v2)
+}
+
+func reflect3(v, n vec3) vec3 {
+  return reflect(v, n)
+}
+
+func getSphere(in mat4) (center vec3, radius, radius2 float, color vec4) {
+        return in[0].xyz, in[0].w, in[1].w, in[2]
+}
+
+func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float, color vec4) {
+        return in[0].xyz, in[3].xyz, in[0].w != 0.0, in[1].w, in[2]
+}
+
+func getLight(in mat4) (center vec3, color vec4, intensity float) {
+        return in[0].xyz, in[2], in[0].w
+}
+
+func getCameraComponents(in mat4) (forward, right, up vec3) {
+        return in[0].xyz, in[1].xyz, in[2].xyz
+}

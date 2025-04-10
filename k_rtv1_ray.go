@@ -1,36 +1,61 @@
 package main
 
-func intersection(rayStart, rayDir vec3, things ThingsT) (closestThing mat4, closest float) {
-	closest = -1.
-
-	for i := 0; i < len(things); i++ {
-		if dist := intersect(rayStart, rayDir, things[i]); dist > 0 {
-			if closest == -1 || dist < closest {
-				closestThing = things[i]
-				closest = dist
-			}
-		}
+func intersect(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
+	if t := getThingType(thing); t == SphereType {
+		return hitSphere(rayStart, rayDir, thing, minDist, maxDist)
+	} else if t == PlaneType {
+		return hitPlane(rayStart, rayDir, thing, minDist, maxDist)
 	}
-	if closest == -1. {
+	return -1.
+}
+
+func intersection(rayStart, rayDir vec3, things ThingsT, minDist, maxDist float) (closestThing mat4, closest float) {
+	closest = maxDist
+	hitSomething := false
+	for i := 0; i < len(things); i++ {
+		dist := intersect(rayStart, rayDir, things[i], minDist, closest)
+		hit := dist != 0
+		if hit {
+			hitSomething = true
+			closest = dist
+			closestThing = things[i]
+		}
+
+	}
+	if !hitSomething {
 		closest = 0.
 	}
 
 	return closestThing, closest
 }
 
-func testRay(rayStart, rayDir vec3, things ThingsT) float {
-	_, dist := intersection(rayStart, rayDir, things)
-	if dist != 0 {
-		return dist
-	}
-	return -1
-}
+// func testRay(rayStart, rayDir vec3, things ThingsT) float {
+// 	_, dist := intersection(rayStart, rayDir, things)
+// 	if dist != 0 {
+// 		return dist
+// 	}
+// 	return -1
+// }
 
 func initRay(width, height, x, y int, cameraComponents mat4) vec3 {
-	recenterX := (float(x) - float(width)/2.0) / 2.0 / float(width)
-	recenterY := -(float(y) - float(height)/2.0) / 2.0 / float(height)
+	// Hard-coded FOV for now.
+	FOV := 45.0
+
+	// Calculcate the viewplane.
+	aspectRatio := float(width) / float(height)
+	theta := FOV * pi / 180.0
+	halfHeight := tan(theta / 2.0)
+	halfWidth := aspectRatio * halfHeight
 
 	forward, right, up := getCameraComponents(cameraComponents)
 
-	return normalize3(add3(forward, add3(scale3(right, recenterX), scale3(up, recenterY))))
+	u := float(x) / float(width-1)
+	v := 1.0 - float(y)/float(height-1)
+
+	dir := scale3(right, u*2.0*halfWidth-halfWidth)
+	dir = add3(dir, scale3(up, v*2.0*halfHeight-halfHeight))
+	dir = sub3(dir, forward)
+	dir = normalize3(dir)
+
+	return dir // Return the calculated direction vector
 }

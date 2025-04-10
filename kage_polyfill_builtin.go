@@ -95,6 +95,10 @@ func dot3(v1, v2 vec3) float {
 	return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z
 }
 
+func reflect3(v, normal vec3) vec3 {
+	return sub3(v, scale3(normal, 2*dot3(v, normal)))
+}
+
 func cos(in float) float     { return math.Cos(in) }
 func sin(in float) float     { return math.Sin(in) }
 func tan(in float) float     { return math.Tan(in) }
@@ -105,6 +109,7 @@ func atan2(y, x float) float { return math.Atan2(y, x) }
 func sqrt(in float) float    { return math.Sqrt(in) }
 func pow(in, n float) float  { return math.Pow(in, n) }
 func floor(in float) float   { return math.Floor(in) }
+func abs(in float) float     { return math.Abs(in) }
 
 const pi = math.Pi
 
@@ -119,6 +124,7 @@ var (
 	_ = sqrt(0)
 	_ = pow(0, 0)
 	_ = floor(0)
+	_ = abs(0)
 )
 
 func newVec3(x, y, z float) vec3 {

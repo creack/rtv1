@@ -9,9 +9,9 @@ package main
 func newCameraComponents(camStart, camLookAt vec3) mat4 {
 	worldUp := newVec3(0, 1, 0)
 
-	forward := normalize3(sub3(camLookAt, camStart))
+	forward := normalize3(sub3(camStart, camLookAt))
 	right := normalize3(cross3(worldUp, forward))
-	up := normalize3(cross3(forward, right))
+	up := cross3(forward, right)
 
 	return newMat4(
 		newVec4(forward.x, forward.y, forward.z, 0),

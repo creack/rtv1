@@ -138,7 +138,7 @@ func (g *Game) Update() error {
 	}
 
 	// Update camera in scene
-	g.scene.Camera.Position = CameraPosition
+	g.scene.Camera.Origin = CameraPosition
 	g.scene.Camera.LookAt = CameraPosition.Add(CameraForward)
 	g.scene.Camera.Up = CameraUp
 
@@ -158,6 +158,8 @@ func (g *Game) Update() error {
 	shouldRender := g.isMoving ||
 		(g.lastRenderTime.Add(100*time.Millisecond).Before(now) &&
 			(g.frameCount%10 == 0 || g.image == nil))
+
+	shouldRender = g.image == nil
 
 	if !g.rendering && shouldRender {
 		// If we just stopped moving, do a high-quality render
@@ -235,12 +237,13 @@ func (g *Game) startRender() {
 		for y := 0; y < height; y += quality {
 			for x := 0; x < width; x += quality {
 				wg.Add(1)
-				go func(px, py int) {
+				// go func
+				func(px, py int) {
 					defer wg.Done()
 					u := float64(px) / float64(width-1)
 					v := 1.0 - float64(py)/float64(height-1) // Flip Y
 					ray := scene.Camera.GetRay(u, v)
-					color := scene.TraceRay(ray, scene.MaxDepth)
+					color := scene.TraceRay(ray, scene.MaxDepth, x, y)
 					results <- PixelResult{px, py, color}
 				}(x, y)
 			}

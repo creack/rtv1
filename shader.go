@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 var (
 	//go:embed k_*.go
 	shaderGo embed.FS
-	//go:embed *.kage
+	//go:embed k_*.kage
 	shaderKage embed.FS
 )
 
@@ -53,12 +54,7 @@ func compileShader(s scene) shader {
 	shaderData, err, duration := trackTime(func() (*ebiten.Shader, error) {
 		// Preprocess the Go code into Kage shader code.
 		str := preprocess(s, shaderBufs...)
-		const dumpShader = false
-		if dumpShader {
-			for i, line := range strings.Split(str, "\n") {
-				fmt.Printf("[%d] %s\n", i, line)
-			}
-		}
+		dumpCompiledShader(str)
 		// Compile the shader.
 		return ebiten.NewShader([]byte(str))
 	})
@@ -69,5 +65,39 @@ func compileShader(s scene) shader {
 		data:            shaderData,
 		err:             err,
 		compileDuration: duration,
+	}
+}
+
+func dumpCompiledShader(str string) {
+	dumpShader := os.Getenv("DUMP_SHADER")
+	// If disabled, nothing to do.
+	if dumpShader == "0" || dumpShader == "" {
+		return
+	}
+
+	// If in "2" mode, dump to stderr with line numbers.
+	if dumpShader == "2" {
+		for i, line := range strings.Split(str, "\n") {
+			fmt.Fprintf(os.Stderr, "[%d] %s\n", i, line)
+		}
+		return
+	}
+
+	// Otherwise, dump to a file, trimed down.
+	buf := ""
+	for _, line := range strings.Split(str, "\n") {
+		if !strings.HasPrefix(line, "//kage:") && strings.HasPrefix(strings.TrimSpace(line), "//") {
+			continue
+		}
+		line = strings.Split(line, "//")[0]
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		buf += line + "\n"
+	}
+
+	// Write the file.
+	if err := os.WriteFile(dumpShader, []byte(buf), 0644); err != nil {
+		log.Printf("Error writing shader file: %s", err)
 	}
 }

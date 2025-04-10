@@ -54,10 +54,11 @@ func (objs *objects) UnmarshalJSON(data []byte) error {
 }
 
 type scene struct {
-	name    string
-	Camera  camera  `json:"camera"`
-	Objects objects `json:"objects"`
-	Lights  []light `json:"lights"`
+	name      string
+	Camera    camera     `json:"camera"`
+	Objects   objects    `json:"objects"`
+	Lights    []light    `json:"lights"`
+	Materials []material `json:"materials"`
 }
 
 func loadScene(fileName string) (scene, error) {
@@ -78,6 +79,9 @@ func loadScene(fileName string) (scene, error) {
 		return scene{}, fmt.Errorf("failed to read scene.json: %w", err)
 	}
 
+	// Reset the material index.
+	materialTypeIndex = map[string]int{}
+
 	// Parse the json. Most of the logic is in scene.UnmarshalJSON.
 	var s scene
 	if err := json.Unmarshal(buf, &s); err != nil {
@@ -93,6 +97,10 @@ func loadScene(fileName string) (scene, error) {
 	sceneLights = make(LightsT, 0, len(s.Lights))
 	for _, elem := range s.Lights {
 		sceneLights = append(sceneLights, elem.mat4())
+	}
+	sceneMaterials = make(MaterialsT, 0, len(s.Materials))
+	for _, elem := range s.Materials {
+		sceneMaterials = append(sceneMaterials, elem.mat4())
 	}
 
 	return s, nil
@@ -135,4 +143,14 @@ func (s scene) marshalInjectLights() string {
 	injectLights += "\t}\n"
 
 	return injectLights
+}
+
+func (s scene) marshalInjectMaterials() string {
+	injectMaterials := "sceneMaterials := MaterialsT{\n"
+	for _, obj := range s.Materials {
+		injectMaterials += "\t\t" + obj.marshalConstructor() + ",\n"
+	}
+	injectMaterials += "\t}\n"
+
+	return injectMaterials
 }

@@ -16,10 +16,16 @@ func preprocess(s scene, files ...[]byte) string {
 	}
 
 	// Inject the scene objects.
-	str = strings.ReplaceAll(str, "//scene:things", s.marshalInjectThings())
-
-	// Inject the scene lights
-	str = strings.ReplaceAll(str, "//scene:lights", s.marshalInjectLights())
+	for _, elem := range []struct {
+		k string
+		f func() string
+	}{
+		{"things", s.marshalInjectThings},
+		{"lights", s.marshalInjectLights},
+		{"materials", s.marshalInjectMaterials},
+	} {
+		str = strings.ReplaceAll(str, "//scene:"+elem.k, elem.f())
+	}
 
 	// Replace the custom types with their underlying equivalents.
 	for _, elem := range []struct {
@@ -29,6 +35,7 @@ func preprocess(s scene, files ...[]byte) string {
 	}{
 		{"ThingsT", "mat4", len(s.Objects)},
 		{"LightsT", "mat4", len(s.Lights)},
+		{"MaterialsT", "mat4", len(s.Materials)},
 	} {
 		underlying := elem.ItemType
 		if elem.ArraySize > 0 {

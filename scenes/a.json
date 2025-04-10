@@ -1,0 +1,107 @@
+{
+  "camera": {
+    "origin": [0, 0, 5],
+    "lookAt": [0, 0, 0]
+  },
+  "objects": [
+    {
+      "type": "sphere",
+      "center": [0, 0, -1],
+      "radius": 0.5,
+      "material": "red"
+    },
+    {
+      "type": "sphere",
+      "center": [-1, -0.25, -1.5],
+      "radius": 0.5,
+      "material": "blue"
+    },
+    {
+      "type": "sphere",
+      "center": [1, 0.5, -1.5],
+      "radius": 0.5,
+      "material": "green"
+    },
+    {
+      "type": "plane",
+      "center": [0, -0.5, 0],
+      "normal": [0, 1, 0],
+      "is_checkerboard": true,
+      "checker_size": 0.1,
+      "material": "white"
+    }
+  ],
+  "lights": [
+    {
+      "origin": [-2, 2, 0],
+      "color": [1, 1, 1],
+      "intensity": 5.0
+    },
+    {
+      "origin": [2, 1, 0],
+      "color": [0.8, 0.8, 1],
+      "intensity": 3.0
+    },
+    {
+      "origin": [0, 0, 1.5],
+      "color": [1, 1, 0.9],
+      "intensity": 2.0
+    }
+  ],
+  "materials": [
+    {
+      "type": "red",
+      "color": [1, 0.2, 0.2, 1],
+      "ambient": 0.1,
+      "diffuse": 0.7,
+      "specular": 0.2,
+      "specular_power": 32,
+      "reflective_index": 0.3
+    },
+    {
+      "type": "blue",
+      "color": [0.2, 0.2, 0.8, 1],
+      "ambient": 0.1,
+      "diffuse": 0.7,
+      "specular": 0.5,
+      "specular_power": 32,
+      "reflective_index": 0.3
+    },
+    {
+      "type": "green",
+      "color": [0.2, 0.8, 0.2, 1],
+      "ambient": 0.2,
+      "diffuse": 1.0,
+      "specular": 0.5,
+      "specular_power": 16,
+      "reflective_index": 0.2
+    },
+    {
+      "type": "yellow",
+      "color": [1.0, 0.9, 0.1, 1],
+      "ambient": 0.2,
+      "diffuse": 1.0,
+      "specular": 0.6,
+      "specular_power": 12,
+      "reflective_index": 0.3
+    },
+    {
+      "type": "orange",
+      "color": [1.0, 0.5, 0.0, 1],
+      "ambient": 0.2,
+      "diffuse": 1.0,
+      "specular": 0.6,
+      "specular_power": 12,
+      "reflective_index": 0.3
+    },
+    {
+      "type": "white",
+      "color": [0.9, 0.9, 0.9, 1],
+      "ambient": 0.1,
+      "diffuse": 0.8,
+      "specular": 0.3,
+      "specular_power": 16,
+      "reflective_index": 0.2
+    }
+  ]
+}

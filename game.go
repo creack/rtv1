@@ -111,14 +111,14 @@ func (g *Game) Update() error {
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
 		moved = true
 		forward, _, _ := getCameraComponents(newCameraComponents(g.scene.Camera.Origin, g.scene.Camera.LookAt))
-		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, scale3(forward, moveSpeed))
-		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(forward, moveSpeed))
+		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, scale3(forward, -moveSpeed))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(forward, -moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyS) {
 		moved = true
 		forward, _, _ := getCameraComponents(newCameraComponents(g.scene.Camera.Origin, g.scene.Camera.LookAt))
-		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, scale3(forward, -moveSpeed))
-		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(forward, -moveSpeed))
+		g.scene.Camera.Origin = add3(g.scene.Camera.Origin, scale3(forward, moveSpeed))
+		g.scene.Camera.LookAt = add3(g.scene.Camera.LookAt, scale3(forward, moveSpeed))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyD) {
 		moved = true
@@ -176,8 +176,8 @@ func (g *Game) drawCPU(screen *ebiten.Image, width, height int) {
 	// Render.
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	buffer := img.Pix
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
+	for y := range height {
+		for x := range width {
 			c0 := Fragment(newVec4(float(x), float(y), 0, 0), vec2{}, vec4{})
 			off := (y*width + x) * 4
 			buffer[off+0] = uint8(min(255, c0.x*255))
@@ -333,7 +333,9 @@ func (g *Game) run() {
 	ebiten.SetWindowSize(initialScreenWidth, initialScreenHeight)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
-	if err := ebiten.RunGameWithOptions(g, &ebiten.RunGameOptions{}); err != nil {
+	if err := ebiten.RunGameWithOptions(g, &ebiten.RunGameOptions{
+		InitUnfocused: true,
+	}); err != nil {
 		log.Fatal(err)
 	}
 }
