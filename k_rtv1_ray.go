@@ -8,8 +8,7 @@ func intersect(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float 
 	} else if t == ConeType {
 		return hitCone(rayStart, rayDir, thing, minDist, maxDist)
 	} else if t == CylinderType {
-		return -1
-		// return hitCylinder(rayStart, rayDir, thing, minDist, maxDist)
+		return hitCylinder(rayStart, rayDir, thing, minDist, maxDist)
 	}
 	return -1.
 }

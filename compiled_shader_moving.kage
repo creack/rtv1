@@ -1,406 +1,1274 @@
 package main
-
-//kage:unit pixels
-
-
 func getThingType(thing mat4) float {
-        return thing[1].z
+	return thing[0].x
 }
-
+func getThingMaterialIdx(thing mat4) int {
+	return int(thing[0].y)
+}
+func getMaterialColor(materials [6]mat4, idx int) vec4 {
+	color, _, _, _, _, _ := getMaterial(materials, idx)
+	return color
+}
 const maxDepth = 15
-
 const (
-        SphereType = 1
-        PlaneType  = 2
-        LightType  = 3
+	SphereType   = 1
+	PlaneType    = 2
+	ConeType     = 3
+	CylinderType = 4
 )
-
-
-func newCameraComponents(camStart, camLookAt vec3) mat4 {
-        worldUp := newVec3(0, 1, 0)
-
-        forward := normalize3(sub3(camStart, camLookAt))
-        right := normalize3(cross3(worldUp, forward))
-        up := cross3(forward, right)
-
-        return newMat4(
-                newVec4(forward.x, forward.y, forward.z, 0),
-                newVec4(right.x, right.y, right.z, 0),
-                newVec4(up.x, up.y, up.z, 0),
-                newVec4(0, 0, 0, 0),
-        )
-}
-
-
-var Time float
-var Resolution vec2
-
 func Fragment(position vec4, _ vec2, _ vec4) vec4 {
-        // "Localize" the uniform globals.
-        width, height := int(Resolution.x), int(Resolution.y)
-        cameraOrigin, cameraLookAt := newVec3(cos(Time), 0.25 * sin(4 * Time) - 0.25, 5-sin(Time)), newVec3(0, 0, 0)
-
-        x := int(position.x)
-        y := int(position.y)
-
-        // Inject the scene constructors for the shader mode.
-        // In Go mode, we use the global variables.
-        sceneObjects := [4]mat4{
-                newSphere(newVec3(0.000000, 0.000000, -1.000000), 0.500000, newVec4(1.000000, 0.200000, 0.200000, 1.000000)),
-                newSphere(newVec3(-1.000000, -0.250000, -1.500000), 0.500000, newVec4(0.200000, 0.200000, 1.000000, 1.000000)),
-                newSphere(newVec3(1.000000, 0.500000, -1.500000), 0.500000, newVec4(0.200000, 1.000000, 0.200000, 1.000000)),
-                newPlane(newVec3(0.000000, -0.500000, 0.000000), newVec3(0.000000, 1.000000, 0.000000), true, 0.100000, newVec4(0.800000, 0.800000, 0.800000, 0.000000)),
-        }
-
-        sceneLights := [3]mat4{
-                newLight(newVec3(-2.000000, 2.000000, 0.000000), newVec4(1.000000, 1.000000, 1.000000, 0.000000), 5.000000),
-                newLight(newVec3(2.000000, 1.000000, 0.000000), newVec4(0.800000, 0.800000, 1.000000, 0.000000), 3.000000),
-                newLight(newVec3(0.000000, 0.000000, 1.500000), newVec4(1.000000, 1.000000, 0.900000, 0.000000), 2.000000),
-        }
-
-
-        cameraComponents := newCameraComponents(cameraOrigin, cameraLookAt)
-
-        rayDir := initRay(width, height, x, y, cameraComponents)
-
-        out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, 0, x, y)
-
-        return out
+	width, height := int(Resolution.x), int(Resolution.y)
+	cameraOrigin, cameraLookAt := UniCameraOrigin, UniCameraLookAt
+	cameraOrigin = newVec3(5*cos(0.5*Time), 0, 5*sin(0.5*Time))
+	x := int(position.x)
+	y := int(position.y)
+	sceneObjects := [6]mat4{
+		newCylinder(newVec3(-0.500000, -0.500000, -0.700000), newVec3(-0.500000, 0.100000, -0.300000), 0.150000, 3),
+		newCone(newVec3(0.500000, -0.500000, -0.700000), newVec3(0.500000, 0.500000, -0.700000), 0.150000, 4),
+		newSphere(newVec3(0.000000, 0.000000, -1.000000), 0.500000, 0),
+		newSphere(newVec3(-1.000000, -0.250000, -1.500000), 0.500000, 1),
+		newSphere(newVec3(1.000000, 0.500000, -1.500000), 0.500000, 2),
+		newPlane(newVec3(0.000000, -0.500000, 0.000000), newVec3(0.000000, 1.000000, 0.000000), true, 0.500000, 5),
+	}
+	sceneLights := [3]mat4{
+		newLight(newVec3(-2.000000, 2.000000, 0.000000), newVec4(1.000000, 1.000000, 1.000000, 0.000000), 5.000000),
+		newLight(newVec3(2.000000, 1.000000, 0.000000), newVec4(0.800000, 0.800000, 1.000000, 0.000000), 3.000000),
+		newLight(newVec3(0.000000, 0.000000, 1.500000), newVec4(1.000000, 1.000000, 0.900000, 1.000000), 2.000000),
+	}
+	sceneMaterials := [6]mat4{
+		newMaterial(0, newVec4(1.000000, 0.200000, 0.200000, 1.000000), 0.100000, 0.700000, 0.200000, 32.000000, 0.300000),
+		newMaterial(1, newVec4(0.200000, 0.200000, 0.800000, 1.000000), 0.100000, 0.700000, 0.500000, 32.000000, 0.300000),
+		newMaterial(2, newVec4(0.200000, 0.800000, 0.200000, 1.000000), 0.200000, 1.000000, 0.500000, 16.000000, 0.200000),
+		newMaterial(3, newVec4(1.000000, 0.900000, 0.100000, 1.000000), 0.200000, 1.000000, 0.600000, 12.000000, 0.300000),
+		newMaterial(4, newVec4(1.000000, 0.500000, 0.000000, 1.000000), 0.200000, 1.000000, 0.600000, 12.000000, 0.300000),
+		newMaterial(5, newVec4(0.900000, 0.900000, 0.900000, 1.000000), 0.100000, 0.800000, 0.300000, 16.000000, 0.200000),
+	}
+	ambientLight := newLight(newVec3(0.000000, 0.000000, 0.000000), newVec4(1.000000, 1.000000, 1.000000, 1.000000), 0.300000)
+	cameraComponents := newCameraComponents(cameraOrigin, cameraLookAt)
+	rayDir := initRay(width, height, x, y, cameraComponents)
+	out := trace(cameraOrigin, rayDir, sceneLights, sceneObjects, sceneMaterials, ambientLight, maxDepth, x, y)
+	return out
 }
-
-
-// p[0].xyz = center
-// p[0].w = intensity
-// p[1].xyzw = color
+func newCameraComponents(camStart, camLookAt vec3) mat4 {
+	worldUp := newVec3(0, 1, 0)
+	forward := normalize3(sub3(camStart, camLookAt))
+	right := normalize3(cross3(worldUp, forward))
+	up := cross3(forward, right)
+	return newMat4(
+		newVec4(forward.x, forward.y, forward.z, 0),
+		newVec4(right.x, right.y, right.z, 0),
+		newVec4(up.x, up.y, up.z, 0),
+		newVec4(0, 0, 0, 0),
+	)
+}
+func getCameraComponents(in mat4) (forward, right, up vec3) {
+	return in[0].xyz, in[1].xyz, in[2].xyz
+}
+func calculatePitch(origin, lookAt vec3) float {
+	direction := sub3(lookAt, origin)
+	horizontalDist := sqrt(direction.x*direction.x + direction.z*direction.z)
+	pitch := atan2(direction.y, horizontalDist)
+	return pitch
+}
 func newLight(center vec3, color vec4, intensity float) mat4 {
-        return newMat4(
-                newVec4(center.x, center.y, center.z, intensity),
-                newVec4(0, 0, LightType, 0),
-                color,
-                newVec4(0, 0, 0, 0),
-        )
+	return newMat4(
+		newVec4(0, 0, 0, 0),
+		newVec4(center.x, center.y, center.z, intensity),
+		color,
+		newVec4(0, 0, 0, 0),
+	)
 }
-
-// center: p[0].xyz
-// normal: p[1].xyz
-// isCheckerBoard: p[0].w
-// checkerSize: p[1].w
-// color: p[2]
-// specular: p[3]
-func newPlane(center, normal vec3, isCheckerBoard bool, checkerSize float, col vec4) mat4 {
-        isCheckerBoardFloat := 0.0
-        if isCheckerBoard {
-                isCheckerBoardFloat = 1.0
-        }
-        return newMat4(
-                newVec4(center.x, center.y, center.z, isCheckerBoardFloat),
-                newVec4(0, 0, PlaneType, checkerSize),
-                col,
-                newVec4(normal.x, normal.y, normal.z, checkerSize),
-        )
+func getLight(in mat4) (center vec3, color vec4, intensity float) {
+	return in[1].xyz, in[2], in[1].w
 }
-
-func diffusePlane(thing mat4, pos vec3) vec4 {
-        _, _, isCheckerboard, checkerSize, col := getPlane(thing) //nolint:dogsled // Expected.
-        if !isCheckerboard {
-                return col
-        }
-
-        if (int(floor(pos.z/checkerSize))+int(floor(pos.x/checkerSize)))%2 != 0 {
-                return newVec4(0.1, 0.1, 0.1, 1)
-        }
-        return col
+func newMaterial(mType int, color vec4, ambient, diffuse, specular, specularPower, reflectiveIndex float) mat4 {
+	return newMat4(
+		newVec4(float(mType), ambient, diffuse, specular),
+		newVec4(color.x, color.y, color.z, color.w),
+		newVec4(specularPower, reflectiveIndex, 0, 0),
+		newVec4(0, 0, 0, 0),
+	)
 }
-
+func getMaterial(materials [6]mat4, idx int) (color vec4, ambient, diffuse, specular, specularPower, reflectiveIndex float) {
+	m := materials[idx]
+	color = m[1]
+	ambient = m[0].y
+	diffuse = m[0].z
+	specular = m[0].w
+	specularPower = m[2].x
+	reflectiveIndex = m[2].y
+	return color, ambient, diffuse, specular, specularPower, reflectiveIndex
+}
+func newCone(base, apex vec3, radius float, materialIdx int) mat4 {
+	return newMat4(
+		newVec4(ConeType, float(materialIdx), radius, radius*radius),
+		newVec4(base.x, base.y, base.z, 0),
+		newVec4(apex.x, apex.y, apex.z, 0),
+		newVec4(0, 0, 0, 0),
+	)
+}
+func getCone(in mat4) (base, apex vec3, radius, radius2 float) {
+	return in[1].xyz, in[2].xyz, in[0].z, in[0].w
+}
+func diffuseCone(thing mat4, pos vec3, materials [6]mat4) vec4 {
+	_ = pos
+	return getMaterialColor(materials, getThingMaterialIdx(thing))
+}
+func normalCone(thing mat4, pos vec3) vec3 {
+	base, apex, radius, _ := getCone(thing)
+	axis := sub3(base, apex)
+	axisLength := length3(axis)
+	axisDir := normalize3(axis)
+	v := sub3(pos, apex)
+	projLen := dot3(v, axisDir)
+	axisPoint := add3(apex, scale3(axisDir, projLen))
+	perpComp := sub3(pos, axisPoint)
+	normal := add3(perpComp, scale3(axisDir, -radius/axisLength))
+	normal = normalize3(normal)
+	return normal
+}
+func hitCone(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
+	base, apex, _, radius2 := getCone(thing)
+	axis := sub3(base, apex)
+	axisLength := length3(axis)
+	axisDir := normalize3(axis)
+	cosTheta := axisLength / sqrt(radius2+axisLength*axisLength)
+	cosTheta2 := cosTheta * cosTheta
+	oc := sub3(rayStart, apex)
+	rdDotAxis := dot3(rayDir, axisDir)
+	ocDotAxis := dot3(oc, axisDir)
+	a := rdDotAxis*rdDotAxis - cosTheta2*dot3(rayDir, rayDir)
+	b := 2.0 * (rdDotAxis*ocDotAxis - cosTheta2*dot3(rayDir, oc))
+	c := ocDotAxis*ocDotAxis - cosTheta2*dot3(oc, oc)
+	discriminant := b*b - 4.0*a*c
+	if discriminant < 0.0 {
+		return 0
+	}
+	sqrtd := sqrt(discriminant)
+	t0 := (-b - sqrtd) / (2.0 * a)
+	t1 := (-b + sqrtd) / (2.0 * a)
+	if t0 > t1 {
+		t0, t1 = t1, t0
+	}
+	t := t0
+	if t < minDist || (maxDist != -1 && t > maxDist) {
+		t = t1
+		if t < minDist || (maxDist != -1 && t > maxDist) {
+			return 0
+		}
+	}
+	hitPoint := add3(rayStart, scale3(rayDir, t))
+	v := sub3(hitPoint, apex)
+	projLen := dot3(v, axisDir)
+	if projLen < 0.0 || projLen > axisLength {
+		t = t1
+		if t < minDist || (maxDist != -1 && t > maxDist) {
+			return 0
+		}
+		hitPoint = add3(rayStart, scale3(rayDir, t))
+		v = sub3(hitPoint, apex)
+		projLen = dot3(v, axisDir)
+		if projLen < 0.0 || projLen > axisLength {
+			return 0
+		}
+	}
+	return t
+}
+func newCylinder(center1, center2 vec3, radius float, materialIndex int) mat4 {
+	return newMat4(
+		newVec4(CylinderType, float(materialIndex), radius, 0),
+		newVec4(center1.x, center1.y, center1.z, 0),
+		newVec4(center2.x, center2.y, center2.z, 0),
+		newVec4(0, 0, 0, 0),
+	)
+}
+func getCylinder(in mat4) (center1, center2 vec3, radius float) {
+	return in[1].xyz, in[2].xyz, in[0].z
+}
+func diffuseCylinder(thing mat4, pos vec3, materials [6]mat4) vec4 {
+	_ = pos
+	return getMaterialColor(materials, getThingMaterialIdx(thing))
+}
+func normalCylinder(thing mat4, pos vec3) vec3 {
+	center1, center2, _ := getCylinder(thing)
+	axis := sub3(center2, center1)
+	axisDir := normalize3(axis)
+	hitPointOnAxis := dot3(sub3(pos, center1), axisDir)
+	pointOnAxis := add3(center1, scale3(axisDir, hitPointOnAxis))
+	normal := sub3(pos, pointOnAxis)
+	normal = normalize3(normal)
+	return normal
+}
+func hitCylinder(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
+	center1, center2, radius := getCylinder(thing)
+	axis := sub3(center2, center1)
+	axisLength := length3(axis)
+	axisDir := normalize3(axis)
+	oc := sub3(rayStart, center1)
+	rayDirDotAxis := dot3(rayDir, axisDir)
+	rayDirPerp := sub3(rayDir, scale3(axisDir, rayDirDotAxis))
+	rayDirPerpLenSq := dot3(rayDirPerp, rayDirPerp)
+	ocDotAxis := dot3(oc, axisDir)
+	ocPerp := sub3(oc, scale3(axisDir, ocDotAxis))
+	a := rayDirPerpLenSq
+	if abs(a) < 1e-8 {
+		return 0
+	}
+	b := 2.0 * dot3(rayDirPerp, ocPerp)
+	c := dot3(ocPerp, ocPerp) - radius*radius
+	discriminant := b*b - 4.0*a*c
+	if discriminant < 0.0 {
+		return 0
+	}
+	sqrtd := sqrt(discriminant)
+	t1 := (-b - sqrtd) / (2.0 * a)
+	t2 := (-b + sqrtd) / (2.0 * a)
+	if t1 > t2 {
+		t1, t2 = t2, t1
+	}
+	t := t1
+	hitPoint := add3(rayStart, scale3(rayDir, t))
+	hitPointOnAxis := dot3(sub3(hitPoint, center1), axisDir)
+	if hitPointOnAxis < 0 || hitPointOnAxis > axisLength || t < minDist || (maxDist != -1 && t > maxDist) {
+		t = t2
+		if t < minDist || (maxDist != -1 && t > maxDist) {
+			return 0
+		}
+		hitPoint = add3(rayStart, scale3(rayDir, t))
+		hitPointOnAxis = dot3(sub3(hitPoint, center1), axisDir)
+		if hitPointOnAxis < 0 || hitPointOnAxis > axisLength {
+			return 0
+		}
+	}
+	return t
+}
+func newPlane(center, normal vec3, isCheckerBoard bool, checkerSize float, materialIdx int) mat4 {
+	isCheckerBoardFloat := 0.0
+	if isCheckerBoard {
+		isCheckerBoardFloat = 1.0
+	}
+	return newMat4(
+		newVec4(PlaneType, float(materialIdx), isCheckerBoardFloat, checkerSize),
+		newVec4(center.x, center.y, center.z, isCheckerBoardFloat),
+		newVec4(normal.x, normal.y, normal.z, checkerSize),
+		newVec4(0, 0, 0, 0),
+	)
+}
+func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float) {
+	return in[1].xyz, in[2].xyz, in[0].z != 0.0, in[0].w
+}
+func diffusePlane(thing mat4, pos vec3, materials [6]mat4) vec4 {
+	_, _, isCheckerboard, checkerSize := getPlane(thing)
+	color := getMaterialColor(materials, getThingMaterialIdx(thing))
+	if !isCheckerboard {
+		return color
+	}
+	if (int(floor(pos.z/checkerSize))+int(floor(pos.x/checkerSize)))%2 != 0 {
+		return newVec4(0.1, 0.1, 0.1, 1)
+	}
+	return color
+}
 func normalPlane(thing mat4, pos vec3) vec3 {
-        _ = pos
-        _, pNorm, _, _, _ := getPlane(thing) //nolint:dogsled // Expected.
-        return pNorm
+	_ = pos
+	_, pNorm, _, _ := getPlane(thing)
+	return pNorm
 }
-
 func hitPlane(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
-        pPos, pNorm, _, _, _ := getPlane(thing) //nolint:dogsled // Expected.
-
-        denom := dot3(rayDir, pNorm)
-        if abs(denom) < 1e-6 {
-                return 0
-        }
-
-        dist := dot3(sub3(pPos, rayStart), pNorm) / denom
-        if dist < minDist || (maxDist != -1 && dist > maxDist) {
-                return 0
-        }
-
-        return dist
+	pPos, pNorm, _, _ := getPlane(thing)
+	denom := dot3(rayDir, pNorm)
+	if abs(denom) < 1e-6 {
+		return 0
+	}
+	dist := dot3(sub3(pPos, rayStart), pNorm) / denom
+	if dist < minDist || (maxDist != -1 && dist > maxDist) {
+		return 0
+	}
+	return dist
 }
-
-
-// center: s[0].xyz
-// radius: s[0].w
-// radius2: s[1].w
-// roughness: s[1].x
-// color: s[2]
-// specular: s[3]
-func newSphere(center vec3, radius float, col vec4) mat4 {
-        return newMat4(
-                newVec4(center.x, center.y, center.z, radius),
-                newVec4(250., 0, SphereType, radius*radius),
-                col,
-                newVec4(0.3, 0.3, 0.3, 1),
-        )
+func newSphere(center vec3, radius float, materialIdx int) mat4 {
+	return newMat4(
+		newVec4(SphereType, float(materialIdx), radius, radius*radius),
+		newVec4(center.x, center.y, center.z, 0),
+		newVec4(0, 0, 0, 0),
+		newVec4(0, 0, 0, 0),
+	)
 }
-
-func diffuseSphere(thing mat4, pos vec3) vec4 {
-        _ = pos
-        _, _, _, col := getSphere(thing) //nolint:dogsled // Expected.
-        return col
+func getSphere(in mat4) (center vec3, radius, radius2 float) {
+	return newVec3(in[1].x, in[0].y+(cos(Time)), in[0].z), in[0].z, in[0].w
 }
-
-func normalSphere(rayStart, center vec3) vec3 {
-        return normalize3(sub3(rayStart, center))
+func diffuseSphere(thing mat4, pos vec3, materials [6]mat4) vec4 {
+	_ = pos
+	return getMaterialColor(materials, getThingMaterialIdx(thing))
 }
-
 func hitSphere(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
-        sphereCenter, _, sphereRadius2, _ := getSphere(thing)
-
-        oc := sub3(rayStart, sphereCenter)
-        a := dot3(rayDir, rayDir)
-        b := 2.0 * dot3(oc, rayDir)
-        c := dot3(oc, oc) - sphereRadius2
-        discriminant := b*b - 4*a*c
-
-        if discriminant < 0 {
-                return 0
-        }
-
-        sqrtd := sqrt(discriminant)
-        root := (-b - sqrtd) / (2 * a)
-        if root < minDist || (maxDist != -1 && root > maxDist) {
-                root = (-b + sqrtd) / (2 * a)
-                if root < minDist || (maxDist != -1 && root > maxDist) {
-                        return 0
-                }
-        }
-
-        return root
+	sphereCenter, _, sphereRadius2 := getSphere(thing)
+	oc := sub3(rayStart, sphereCenter)
+	a := dot3(rayDir, rayDir)
+	b := 2.0 * dot3(oc, rayDir)
+	c := dot3(oc, oc) - sphereRadius2
+	discriminant := b*b - 4*a*c
+	if discriminant < 0 {
+		return 0
+	}
+	sqrtd := sqrt(discriminant)
+	root := (-b - sqrtd) / (2 * a)
+	if root < minDist || (maxDist != -1 && root > maxDist) {
+		root = (-b + sqrtd) / (2 * a)
+		if root < minDist || (maxDist != -1 && root > maxDist) {
+			return 0
+		}
+	}
+	return root
 }
-
 func intersect(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
-        if t := getThingType(thing); t == SphereType {
-                return hitSphere(rayStart, rayDir, thing, minDist, maxDist)
-        } else if t == PlaneType {
-                return hitPlane(rayStart, rayDir, thing, minDist, maxDist)
-        }
-        return -1.
+	if t := getThingType(thing); t == SphereType {
+		return hitSphere(rayStart, rayDir, thing, minDist, maxDist)
+	} else if t == PlaneType {
+		return hitPlane(rayStart, rayDir, thing, minDist, maxDist)
+	} else if t == ConeType {
+		return hitCone(rayStart, rayDir, thing, minDist, maxDist)
+	} else if t == CylinderType {
+		return hitCylinder(rayStart, rayDir, thing, minDist, maxDist)
+	}
+	return -1.
 }
-
-func intersection(rayStart, rayDir vec3, things [4]mat4, minDist, maxDist float) (closestThing mat4, closest float) {
-        closest = maxDist
-        hitSomething := false
-        for i := 0; i < len(things); i++ {
-                dist := intersect(rayStart, rayDir, things[i], minDist, closest)
-                hit := dist != 0
-                if hit {
-                        hitSomething = true
-                        closest = dist
-                        closestThing = things[i]
-                }
-
-        }
-        if !hitSomething {
-                closest = 0.
-        }
-
-        return closestThing, closest
+func intersection(rayStart, rayDir vec3, things [6]mat4, minDist, maxDist float) (closestThing mat4, closest float) {
+	closest = maxDist
+	hitSomething := false
+	for i := 0; i < len(things); i++ {
+		dist := intersect(rayStart, rayDir, things[i], minDist, closest)
+		hit := dist != 0
+		if hit {
+			hitSomething = true
+			closest = dist
+			closestThing = things[i]
+		}
+	}
+	if !hitSomething {
+		closest = 0.
+	}
+	return closestThing, closest
 }
-
 func initRay(width, height, x, y int, cameraComponents mat4) vec3 {
-        // Hard-coded FOV for now.
-        FOV := 45.0
-
-        // Calculcate the viewplane.
-        aspectRatio := float(width) / float(height)
-        theta := FOV * pi / 180.0
-        halfHeight := tan(theta / 2.0)
-        halfWidth := aspectRatio * halfHeight
-
-        forward, right, up := getCameraComponents(cameraComponents)
-
-        u := float(x) / float(width-1)
-        v := 1.0 - float(y)/float(height-1)
-
-        dir := scale3(right, u*2.0*halfWidth-halfWidth)
-        dir = add3(dir, scale3(up, v*2.0*halfHeight-halfHeight))
-        dir = sub3(dir, forward)
-        dir = normalize3(dir)
-
-        return dir // Return the calculated direction vector
+	const FOV = 45.0
+	aspectRatio := float(width) / float(height)
+	theta := FOV * pi / 180.0
+	halfHeight := tan(theta / 2.0)
+	halfWidth := aspectRatio * halfHeight
+	forward, right, up := getCameraComponents(cameraComponents)
+	u := float(x) / float(width)
+	v := 1.0 - float(y)/float(height)
+	dir := scale3(right, u*2.0*halfWidth-halfWidth)
+	dir = add3(dir, scale3(up, v*2.0*halfHeight-halfHeight))
+	dir = sub3(dir, forward)
+	dir = normalize3(dir)
+	return dir
 }
-
-
-// This file contains the recursive functions used for the raytracer.
-// It compiles to both Go and Kage shader (after pre-processing).
-
-func getThingDiffuse(thing mat4, recPoint vec3) vec4 {
-        if t := getThingType(thing); t == SphereType {
-                return diffuseSphere(thing, recPoint)
-        } else if t == PlaneType {
-                return diffusePlane(thing, recPoint)
-        } else {
-                return newVec4(1, 0, 1, 1) // Error color.
-        }
+func getThingDiffuse(thing mat4, recPoint vec3, materials [6]mat4) vec4 {
+	if t := getThingType(thing); t == SphereType {
+		return diffuseSphere(thing, recPoint, materials)
+	} else if t == PlaneType {
+		return diffusePlane(thing, recPoint, materials)
+	} else if t == ConeType {
+		return diffuseCone(thing, recPoint, materials)
+	} else if t == CylinderType {
+		return diffuseCylinder(thing, recPoint, materials)
+	}
+	return newVec4(1, 0, 1, 1)
 }
-
-func trace(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [4]mat4, depth int, x, y int) vec4 {
-        result := newVec4(0.1, 0.1, 0.1, 1) // Background color.
-        closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
-
-        if dist == 0 {
-                return result
-        }
-
-        var recNormal vec3
-
-        recPoint := add3(cameraOrigin, scale3(rayDir, dist))
-        if t := getThingType(closestThing); t == SphereType {
-                result = diffuseSphere(closestThing, recPoint)
-                center, radius, _, _ := getSphere(closestThing)
-                recNormal = scale3(sub3(recPoint, center), 1/radius)
-        } else if t == PlaneType {
-                result = diffusePlane(closestThing, recPoint)
-                recNormal = normalPlane(closestThing, recPoint)
-        } else {
-                return newVec4(1, 1, 0, 1) // Error color.
-        }
-
-        const materialRedAmbient = 0.1
-        ambientLight := newVec4(0.05, 0.05, 0.05, 1)
-        result = mul4(scale4(result, materialRedAmbient), ambientLight)
-
-        //nolint:modernize // Kage doesn't support range.
-        for i := 0; i < len(lights); i++ {
-                light := lights[i]
-                lightOrigin, lightColor, lightIntensity := getLight(light)
-
-                _ = lightOrigin
-                _ = lightColor
-                _ = lightIntensity
-
-                lightDir := sub3(lightOrigin, recPoint)
-                lightDistance := length3(lightDir)
-                lightDir = normalize3(lightDir)
-                _ = lightDistance
-
-                // Re-cast from the hit point to the light source.
-                _, dist := intersection(recPoint, lightDir, things, 0.001, lightDistance)
-                if dist != 0 { // If we hit something, we don't see the light, so move forward.
-                        continue
-                }
-
-                // If we didn't hit anything, it means we have the light source in sight.
-
-                const materialRedDiffuse = 0.7
-                diffFactor := max(0, dot3(recNormal, lightDir))
-                diffuse := scale4(getThingDiffuse(closestThing, recPoint), materialRedDiffuse*diffFactor)
-
-
-                _ = diffFactor
-                _ = diffuse
-
-                viewDir := normalize3(scale3(rayDir, -1))
-                reflectDir := reflect3(scale3(lightDir, -1), recNormal)
-                const materalRedSpecular = 0.5
-                const materalRedSpecularPower = 32
-                specFactor := pow(max(0, dot3(viewDir, reflectDir)), materalRedSpecularPower)
-                specular := scale4(lightColor, materalRedSpecular*specFactor)
-                _ = specular
-
-                combined := add4(diffuse, specular)
-                combined = scale4(mul4(combined, lightColor), lightIntensity)
-
-                attenuation := 1.0 / (lightDistance * lightDistance)
-                combined = scale4(combined, attenuation)
-                result = add4(result, combined)
-        }
-
-        return result
-}
-
-var UniScreenWidth, UniScreenHeight int
-
 var UniCameraOrigin, UniCameraLookAt vec3
-
-
-const pi = 3.14159265358979323846264338327950288419716939937510582097494459 // https://oeis.org/A000796
-
+var Time float
+var Resolution, Cursor vec2
+const pi = 3.14159265358979323846264338327950288419716939937510582097494459
 func newVec3(x, y, z float) vec3 {
-        return vec3(x, y, z)
+	return vec3(x, y, z)
 }
-
 func newVec4(x, y, z, w float) vec4 {
-        return vec4(x, y, z, w)
+	return vec4(x, y, z, w)
 }
-
 func newMat4(a, b, c, d vec4) mat4 {
-        return mat4(a, b, c, d)
+	return mat4(a, b, c, d)
 }
-
 func sub3(v1, v2 vec3) vec3 {
   return v1 - v2
 }
-
 func add3(v1, v2 vec3) vec3 {
   return v1 + v2
 }
-
 func add4(v1, v2 vec4) vec4 {
-  return newVec4(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z, 1)
+  return v1 + v2
 }
-
 func mul4(v1, v2 vec4) vec4 {
-  return newVec4(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z, 1)
+  return v1 * v2
 }
-
 func scale3(v1 vec3, f float) vec3 {
   return v1 * f
 }
-
 func scale4(v1 vec4, f float) vec4 {
-  return newVec4(v1.x * f, v1.y * f, v1.z * f, 1)
+  return v1 * f
 }
-
 func normalize3(v vec3) vec3 {
-        return normalize(v)
+	return normalize(v)
 }
-
 func cross3(v1, v2 vec3) vec3 {
   return cross(v1, v2)
 }
-
 func length3(v vec3) float {
   return length(v)
 }
-
 func dot3(v1, v2 vec3) float {
   return dot(v1, v2)
 }
-
 func reflect3(v, n vec3) vec3 {
   return reflect(v, n)
 }
-
-func getSphere(in mat4) (center vec3, radius, radius2 float, color vec4) {
-        return in[0].xyz, in[0].w, in[1].w, in[2]
+func trace(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace1(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
 }
-
-func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float, color vec4) {
-        return in[0].xyz, in[3].xyz, in[0].w != 0.0, in[1].w, in[2]
+func trace1(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace2(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
 }
-
-func getLight(in mat4) (center vec3, color vec4, intensity float) {
-        return in[0].xyz, in[2], in[0].w
+func trace2(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace3(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
 }
-
-func getCameraComponents(in mat4) (forward, right, up vec3) {
-        return in[0].xyz, in[1].xyz, in[2].xyz
+func trace3(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace4(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace4(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace5(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace5(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace6(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace6(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace7(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace7(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace8(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace8(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace9(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace9(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace10(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace10(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace11(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace11(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace12(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace12(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace13(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace13(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	if matReflectiveIndex > 0 && depth > 0 {
+		reflectDir := reflect3(rayDir, hitNormal)
+		reflectColor := trace14(hitPoint, reflectDir, lights, things, materials, ambientLight, depth-1, x, y)
+		result = add4(result, scale4(reflectColor, matReflectiveIndex))
+	}
+	return result
+}
+func trace14(cameraOrigin vec3, rayDir vec3, lights [3]mat4, things [6]mat4, materials [6]mat4, ambientLight mat4, depth int, x, y int) vec4 {
+	result := newVec4(0.1, 0.1, 0.1, 1)
+	closestThing, dist := intersection(cameraOrigin, rayDir, things, 0.001, -1)
+	if dist == 0 {
+		return result
+	}
+	var hitNormal vec3
+	hitPoint := add3(cameraOrigin, scale3(rayDir, dist))
+	if t := getThingType(closestThing); t == SphereType {
+		result = diffuseSphere(closestThing, hitPoint, materials)
+		center, radius, _ := getSphere(closestThing)
+		hitNormal = scale3(sub3(hitPoint, center), 1/radius)
+	} else if t == PlaneType {
+		result = diffusePlane(closestThing, hitPoint, materials)
+		hitNormal = normalPlane(closestThing, hitPoint)
+	} else if t == ConeType {
+		result = diffuseCone(closestThing, hitPoint, materials)
+		hitNormal = normalCone(closestThing, hitPoint)
+	} else if t == CylinderType {
+		result = diffuseCylinder(closestThing, hitPoint, materials)
+		hitNormal = normalCylinder(closestThing, hitPoint)
+	} else {
+		return newVec4(1, 1, 0, 1)
+	}
+	_, matAmbient, matDiffuse, matSpecular, matSpecularPower, matReflectiveIndex := getMaterial(materials, getThingMaterialIdx(closestThing))
+	_, ambientLightColor, ambientLightIntensity := getLight(ambientLight)
+	result = mul4(scale4(result, matAmbient), scale4(ambientLightColor, ambientLightIntensity))
+	for i := 0; i < len(lights); i++ {
+		light := lights[i]
+		lightOrigin, lightColor, lightIntensity := getLight(light)
+		lightDir := sub3(lightOrigin, hitPoint)
+		lightDistance := length3(lightDir)
+		lightDir = normalize3(lightDir)
+		_, dist := intersection(hitPoint, lightDir, things, 0.001, lightDistance)
+		if dist != 0 {
+			continue
+		}
+		diffFactor := max(0, dot3(hitNormal, lightDir))
+		diffuse := scale4(getThingDiffuse(closestThing, hitPoint, materials), matDiffuse*diffFactor)
+		viewDir := normalize3(scale3(rayDir, -1))
+		reflectDir := reflect3(scale3(lightDir, -1), hitNormal)
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), matSpecularPower)
+		specular := scale4(lightColor, matSpecular*specFactor)
+		combined := add4(diffuse, specular)
+		combined = scale4(mul4(combined, lightColor), lightIntensity)
+		attenuation := 1.0 / (lightDistance * lightDistance)
+		combined = scale4(combined, attenuation)
+		result = add4(result, combined)
+	}
+	_ = matReflectiveIndex
+	return result
 }

@@ -22,7 +22,7 @@ func getMaterialColor(materials MaterialsT, idx int) vec4 {
 	return color
 }
 
-const maxDepth = 3
+const maxDepth = 15
 
 const (
 	SphereType   = 1
@@ -39,7 +39,7 @@ func Fragment(position vec4, _ vec2, _ vec4) vec4 {
 	width, height := int(Resolution.x), int(Resolution.y)
 
 	cameraOrigin, cameraLookAt := UniCameraOrigin, UniCameraLookAt
-	cameraOrigin = newVec3(5*cos(0.5*Time), 0, 5*sin(0.5*Time))
+	// cameraOrigin = newVec3(5*cos(0.5*Time), 0, 5*sin(0.5*Time))
 
 	x := int(position.x)
 	y := int(position.y)

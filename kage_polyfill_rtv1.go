@@ -146,13 +146,13 @@ func (c *cone) UnmarshalJSON(data []byte) error {
 }
 
 func (c cone) mat4() mat4 {
-	return newCone(c.Apex, c.Base, c.Radius, materialTypeIndex[c.Material])
+	return newCone(c.Base, c.Apex, c.Radius, materialTypeIndex[c.Material])
 }
 
 func (c cone) marshalConstructor() string {
 	return fmt.Sprintf("newCone(%s, %s, %f, %d)",
-		c.Apex.marshalConstructor(),
 		c.Base.marshalConstructor(),
+		c.Apex.marshalConstructor(),
 		c.Radius,
 		materialTypeIndex[c.Material],
 	)
