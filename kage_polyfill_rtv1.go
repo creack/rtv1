@@ -39,7 +39,7 @@ func (s *sphere) UnmarshalJSON(data []byte) error {
 	if s.Radius <= 0 {
 		return fmt.Errorf("radius must be greater than 0")
 	}
-	if s.Center.vec2 == nil {
+	if s.Center == (vec3{}) {
 		return fmt.Errorf("missing 'center'")
 	}
 	return nil
@@ -67,10 +67,10 @@ func (p *plane) UnmarshalJSON(data []byte) error {
 	if p.IsCheckerboard && p.CheckerSize <= 0 {
 		return fmt.Errorf("checker size must be greater than 0")
 	}
-	if p.Center.vec2 == nil {
+	if p.Center == (vec3{}) {
 		return fmt.Errorf("missing 'center'")
 	}
-	if p.Normal.vec2 == nil {
+	if p.Normal == (vec3{}) {
 		return fmt.Errorf("missing 'normal'")
 	}
 	return nil

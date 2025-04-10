@@ -17,7 +17,7 @@ func (v vec2) uniform() []float32 {
 }
 
 type vec3 struct {
-	*vec2
+	vec2
 	xy vec2
 	z  float
 }
@@ -45,7 +45,7 @@ func (v vec3) uniform() []float32 {
 }
 
 type vec4 struct {
-	*vec3
+	vec3
 	xyz vec3
 	w   float
 }
@@ -132,7 +132,7 @@ func newVec3(x, y, z float) vec3 {
 	var v vec3
 	v.xy.x = x
 	v.xy.y = y
-	v.vec2 = &v.xy
+	v.vec2 = v.xy
 	v.z = z
 	return v
 }
@@ -140,7 +140,7 @@ func newVec3(x, y, z float) vec3 {
 func newVec4(x, y, z, w float) vec4 {
 	var v vec4
 	v.xyz = newVec3(x, y, z)
-	v.vec3 = &v.xyz
+	v.vec3 = v.xyz
 	v.w = w
 	return v
 }
