@@ -20,8 +20,8 @@ func newPlane(center, normal vec3, isCheckerBoard bool, checkerSize float, mater
 }
 
 func diffusePlane(thing mat4, pos vec3, materials MaterialsT) vec4 {
-	_, _, isCheckerboard, checkerSize, materialIdx := getPlane(thing) //nolint:dogsled // Expected.
-	_, color, _, _, _, _, _ := getMaterial(materials, materialIdx)
+	_, _, isCheckerboard, checkerSize := getPlane(thing) //nolint:dogsled // Expected.
+	color := getMaterialColor(materials, getThingMaterialIdx(thing))
 	if !isCheckerboard {
 		return color
 	}
@@ -34,13 +34,13 @@ func diffusePlane(thing mat4, pos vec3, materials MaterialsT) vec4 {
 
 func normalPlane(thing mat4, pos vec3) vec3 {
 	_ = pos
-	_, pNorm, _, _, _ := getPlane(thing) //nolint:dogsled // Expected.
+	_, pNorm, _, _ := getPlane(thing) //nolint:dogsled // Expected.
 	//log.Println(pNorm)
 	return pNorm
 }
 
 func hitPlane(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
-	pPos, pNorm, _, _, _ := getPlane(thing) //nolint:dogsled // Expected.
+	pPos, pNorm, _, _ := getPlane(thing) //nolint:dogsled // Expected.
 
 	denom := dot3(rayDir, pNorm)
 	if abs(denom) < 1e-6 {

@@ -26,7 +26,7 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 	recPoint := add3(cameraOrigin, scale3(rayDir, dist))
 	if t := getThingType(closestThing); t == SphereType {
 		result = diffuseSphere(closestThing, recPoint, materials)
-		center, radius, _, _ := getSphere(closestThing)
+		center, radius, _ := getSphere(closestThing)
 		recNormal = scale3(sub3(recPoint, center), 1/radius)
 	} else if t == PlaneType {
 		result = diffusePlane(closestThing, recPoint, materials)
@@ -35,10 +35,9 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 		return newVec4(1, 1, 0, 1) // Error color.
 	}
 
-	const materialRedAmbient = 0.1
-	getMaterial(materials, 0)
-	ambientLight := newVec4(0.05, 0.05, 0.05, 1)
-	result = mul4(scale4(result, materialRedAmbient), ambientLight)
+	_, materialAmbient, materialDiffuse, materialSpecular, materialSpecularPower, _ := getMaterial(materials, getThingMaterialIdx(closestThing))
+	ambientLight := newVec4(0.05, 0.05, 0.05, 1) // TODO: Use the scene ambient light.
+	result = mul4(scale4(result, materialAmbient), ambientLight)
 
 	for i := 0; i < len(lights); i++ {
 		light := lights[i]
@@ -57,16 +56,19 @@ func trace(cameraOrigin vec3, rayDir vec3, lights LightsT, things ThingsT, mater
 
 		// If we didn't hit anything, it means we have the light source in sight.
 
-		const materialRedDiffuse = 0.7
 		diffFactor := max(0, dot3(recNormal, lightDir))
-		diffuse := scale4(getThingDiffuse(closestThing, recPoint, materials), materialRedDiffuse*diffFactor)
+		diffuse := scale4(getThingDiffuse(closestThing, recPoint, materials), materialDiffuse*diffFactor)
 
 		viewDir := normalize3(scale3(rayDir, -1))
 		reflectDir := reflect3(scale3(lightDir, -1), recNormal)
+
 		const materalRedSpecular = 0.5
 		const materalRedSpecularPower = 32
-		specFactor := pow(max(0, dot3(viewDir, reflectDir)), materalRedSpecularPower)
-		specular := scale4(lightColor, materalRedSpecular*specFactor)
+
+		//log.Println(materialSpecularPower, materalRedSpecularPower)
+		//materialSpecularPower = materalRedSpecularPower
+		specFactor := pow(max(0, dot3(viewDir, reflectDir)), materialSpecularPower)
+		specular := scale4(lightColor, materialSpecular*specFactor)
 		_ = specular
 
 		combined := add4(diffuse, specular)

@@ -36,8 +36,8 @@ func (s sphere) marshalConstructor() string {
 }
 
 //nolint:unparam // Keeping for reference.
-func getSphere(in mat4) (center vec3, radius, radius2 float, materialIdx int) {
-	return in[1].vec3, in[0].z, in[0].w, int(in[0].y)
+func getSphere(in mat4) (center vec3, radius, radius2 float) {
+	return in[1].vec3, in[0].z, in[0].w
 }
 
 type plane struct {
@@ -62,8 +62,8 @@ func (p plane) marshalConstructor() string {
 	)
 }
 
-func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float, materialIdx int) {
-	return in[1].vec3, in[2].vec3, in[0].z != 0.0, in[0].w, int(in[0].y)
+func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float) {
+	return in[1].vec3, in[2].vec3, in[0].z != 0.0, in[0].w
 }
 
 type light struct {
@@ -125,16 +125,15 @@ func (m material) marshalConstructor() string {
 	)
 }
 
-func getMaterial(materials MaterialsT, idx int) (mType float, color vec4, ambient, diffuse, specular, specularPower, reflectiveIndex float) {
+func getMaterial(materials MaterialsT, idx int) (color vec4, ambient, diffuse, specular, specularPower, reflectiveIndex float) {
 	m := materials[idx]
-	mType = m[0].x
 	color = m[1]
 	ambient = m[0].y
 	diffuse = m[0].z
 	specular = m[0].w
 	specularPower = m[1].x
 	reflectiveIndex = m[1].y
-	return mType, color, ambient, diffuse, specular, specularPower, reflectiveIndex
+	return color, ambient, diffuse, specular, specularPower, reflectiveIndex
 }
 
 type camera struct {

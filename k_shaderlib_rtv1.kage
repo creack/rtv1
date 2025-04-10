@@ -5,28 +5,27 @@ package main
 
 // This file create a Go compatible wrapper mapping to the Kage native functions/types for the RTv1 specific code.
 
-func getSphere(in mat4) (center vec3, radius, radius2 float, materialIdx int) {
-	return in[1].xyz, in[0].z, in[0].w, int(in[0].y)
+func getSphere(in mat4) (center vec3, radius, radius2 float) {
+	return in[1].xyz, in[0].z, in[0].w
 }
 
-func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float, materialIdx int) {
-	return in[1].xyz, in[2].xyz, in[0].z != 0.0, in[0].w, int(in[0].y)
+func getPlane(in mat4) (center, normal vec3, isCheckerBoard bool, checkerSize float) {
+	return in[1].xyz, in[2].xyz, in[0].z != 0.0, in[0].w
 }
 
 func getLight(in mat4) (center vec3, color vec4, intensity float) {
 	return in[0].xyz, in[2], in[0].w
 }
 
-func getMaterial(materials MaterialsT, idx int) (mType float, color vec4, ambient, diffuse, specular, specularPower, reflectiveIndex float) {
+func getMaterial(materials MaterialsT, idx int) (color vec4, ambient, diffuse, specular, specularPower, reflectiveIndex float) {
 	m := materials[idx]
-	mType = m[0][0]
 	color = m[1]
-	ambient = m[0][1]
-	diffuse = m[0][2]
-	specular = m[0][3]
-	specularPower = m[1][0]
-	reflectiveIndex = m[1][1]
-	return mType, color, ambient, diffuse, specular, specularPower, reflectiveIndex
+	ambient = m[0].y
+	diffuse = m[0].z
+	specular = m[0].w
+	specularPower = m[2].x
+	reflectiveIndex = m[2].y
+	return color, ambient, diffuse, specular, specularPower, reflectiveIndex
 }
 
 func getCameraComponents(in mat4) (forward, right, up vec3) {

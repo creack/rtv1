@@ -16,13 +16,11 @@ func newSphere(center vec3, radius float, materialIdx int) mat4 {
 
 func diffuseSphere(thing mat4, pos vec3, materials MaterialsT) vec4 {
 	_ = pos
-	_, _, _, materialIdx := getSphere(thing) //nolint:dogsled // Expected.
-	_, color, _, _, _, _, _ := getMaterial(materials, materialIdx)
-	return color
+	return getMaterialColor(materials, getThingMaterialIdx(thing))
 }
 
 func hitSphere(rayStart, rayDir vec3, thing mat4, minDist, maxDist float) float {
-	sphereCenter, _, sphereRadius2, _ := getSphere(thing)
+	sphereCenter, _, sphereRadius2 := getSphere(thing)
 
 	oc := sub3(rayStart, sphereCenter)
 	a := dot3(rayDir, rayDir)

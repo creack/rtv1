@@ -16,6 +16,11 @@ func getThingMaterialIdx(thing mat4) int {
 	return int(thing[0].y)
 }
 
+func getMaterialColor(materials MaterialsT, idx int) vec4 {
+	color, _, _, _, _, _ := getMaterial(materials, idx)
+	return color
+}
+
 const maxDepth = 15
 
 const (
